@@ -1,0 +1,17 @@
+{
+  "name": "adfix-pm",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:api": "npm --workspace @adfix/api run dev",
+    "build:api": "npm --workspace @adfix/api run build",
+    "start:api": "npm --workspace @adfix/api run start",
+    "typecheck": "npm --workspace @adfix/api run typecheck",
+    "db:migrate": "npm --workspace @adfix/api run db:migrate",
+    "db:seed": "npm --workspace @adfix/api run db:seed"
+  }
+}
