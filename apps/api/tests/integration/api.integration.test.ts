@@ -392,4 +392,98 @@ describe("API integration", () => {
     expect(counts.task_status_changed).toBe(4);
     expect(counts.task_deleted).toBe(1);
   });
+
+  it("files: upload metadata + link + list + delete with activity logs", async () => {
+    const auth = await login();
+
+    const clientResponse = await request(app)
+      .post("/api/clients")
+      .set("Authorization", `Bearer ${auth.accessToken}`)
+      .send({ name: "Files Client" });
+
+    expect(clientResponse.status).toBe(201);
+    const clientId = clientResponse.body.data.id as string;
+
+    const projectResponse = await request(app)
+      .post("/api/projects")
+      .set("Authorization", `Bearer ${auth.accessToken}`)
+      .send({
+        clientId,
+        name: "Files Project",
+        startDate: "2026-02-12",
+        deadline: "2026-03-31"
+      });
+
+    expect(projectResponse.status).toBe(201);
+    const projectId = projectResponse.body.data.id as string;
+
+    const uploadResponse = await request(app)
+      .post("/api/files/upload")
+      .set("Authorization", `Bearer ${auth.accessToken}`)
+      .send({
+        projectId,
+        fileName: "creative-brief.pdf",
+        fileType: "creative_brief",
+        storageType: "s3",
+        objectKey: "projects/x/creative-brief.pdf",
+        mimeType: "application/pdf",
+        fileSize: 2048,
+        checksumSha256: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      });
+
+    expect(uploadResponse.status).toBe(201);
+    const uploadedFileId = uploadResponse.body.data.id as string;
+
+    const linkResponse = await request(app)
+      .post("/api/files/link")
+      .set("Authorization", `Bearer ${auth.accessToken}`)
+      .send({
+        projectId,
+        fileName: "asset-folder",
+        fileType: "asset",
+        storageType: "google_drive",
+        externalUrl: "https://drive.google.com/file/d/abc123/view",
+        mimeType: "application/vnd.google-apps.folder",
+        fileSize: 1
+      });
+
+    expect(linkResponse.status).toBe(201);
+    const linkedFileId = linkResponse.body.data.id as string;
+
+    const listResponse = await request(app)
+      .get(`/api/files/project/${projectId}`)
+      .set("Authorization", `Bearer ${auth.accessToken}`);
+
+    expect(listResponse.status).toBe(200);
+    expect(listResponse.body.data.length).toBe(2);
+
+    const deleteResponse = await request(app)
+      .delete(`/api/files/${linkedFileId}`)
+      .set("Authorization", `Bearer ${auth.accessToken}`);
+
+    expect(deleteResponse.status).toBe(204);
+
+    const listAfterDelete = await request(app)
+      .get(`/api/files/project/${projectId}`)
+      .set("Authorization", `Bearer ${auth.accessToken}`);
+
+    expect(listAfterDelete.status).toBe(200);
+    expect(listAfterDelete.body.data.length).toBe(1);
+    expect(listAfterDelete.body.data[0].id).toBe(uploadedFileId);
+
+    const fileActionCounts = await pool.query<{ action: string; count: string }>(
+      `SELECT action, COUNT(*)::text AS count
+       FROM activity_log
+       WHERE action IN ('file_uploaded', 'file_linked', 'file_deleted')
+       GROUP BY action`
+    );
+
+    const counts = Object.fromEntries(
+      fileActionCounts.rows.map((row) => [row.action, Number(row.count)])
+    );
+
+    expect(counts.file_uploaded).toBe(1);
+    expect(counts.file_linked).toBe(1);
+    expect(counts.file_deleted).toBe(1);
+  });
 });
