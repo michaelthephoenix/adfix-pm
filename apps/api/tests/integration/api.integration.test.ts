@@ -72,6 +72,9 @@ describe("API integration", () => {
     expect(docsResponse.status).toBe(200);
     expect(docsResponse.body.openapi).toBe("3.0.3");
     expect(docsResponse.body.info.title).toBe("Adfix PM API");
+    expect(docsResponse.body.paths).toHaveProperty("/users/audit-logs");
+    expect(docsResponse.body.paths).toHaveProperty("/tasks/bulk/status");
+    expect(docsResponse.body.components.schemas).toHaveProperty("ErrorResponse");
   });
 
   it("auth: login, me, refresh, logout, logout-all", async () => {

@@ -35,6 +35,7 @@ Monorepo scaffold for the Adfix Project Management System.
 ## API Docs + Observability
 - OpenAPI spec endpoint: `GET /api/docs.json`
 - Docs landing page: `GET /api/docs`
+- Spec now includes all active route groups (`auth`, `clients`, `projects`, `tasks`, `files`, `analytics`, `search`, `users`, admin controls).
 - Health endpoint now includes database status: `GET /api/health`
 - Every response includes `x-request-id` for tracing.
 
