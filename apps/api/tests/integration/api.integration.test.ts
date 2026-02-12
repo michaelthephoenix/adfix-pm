@@ -235,4 +235,161 @@ describe("API integration", () => {
       "project_deleted"
     ]);
   });
+
+  it("tasks: CRUD + status transitions + project detail summary + activity logs", async () => {
+    const auth = await login();
+
+    const clientResponse = await request(app)
+      .post("/api/clients")
+      .set("Authorization", `Bearer ${auth.accessToken}`)
+      .send({ name: "Tasks Client" });
+
+    expect(clientResponse.status).toBe(201);
+    const clientId = clientResponse.body.data.id as string;
+
+    const projectResponse = await request(app)
+      .post("/api/projects")
+      .set("Authorization", `Bearer ${auth.accessToken}`)
+      .send({
+        clientId,
+        name: "Tasks Project",
+        startDate: "2026-02-12",
+        deadline: "2026-03-30"
+      });
+
+    expect(projectResponse.status).toBe(201);
+    const projectId = projectResponse.body.data.id as string;
+
+    const taskA = await request(app)
+      .post("/api/tasks")
+      .set("Authorization", `Bearer ${auth.accessToken}`)
+      .send({
+        projectId,
+        title: "Overdue pending task",
+        phase: "production",
+        dueDate: "2020-01-01"
+      });
+
+    const taskB = await request(app)
+      .post("/api/tasks")
+      .set("Authorization", `Bearer ${auth.accessToken}`)
+      .send({
+        projectId,
+        title: "Completable task",
+        phase: "production"
+      });
+
+    const taskC = await request(app)
+      .post("/api/tasks")
+      .set("Authorization", `Bearer ${auth.accessToken}`)
+      .send({
+        projectId,
+        title: "Blockable task",
+        phase: "production"
+      });
+
+    expect(taskA.status).toBe(201);
+    expect(taskB.status).toBe(201);
+    expect(taskC.status).toBe(201);
+
+    const taskAId = taskA.body.data.id as string;
+    const taskBId = taskB.body.data.id as string;
+    const taskCId = taskC.body.data.id as string;
+
+    const updateTaskA = await request(app)
+      .put(`/api/tasks/${taskAId}`)
+      .set("Authorization", `Bearer ${auth.accessToken}`)
+      .send({ description: "Updated details" });
+
+    expect(updateTaskA.status).toBe(200);
+    expect(updateTaskA.body.data.description).toBe("Updated details");
+
+    const taskBInProgress = await request(app)
+      .patch(`/api/tasks/${taskBId}/status`)
+      .set("Authorization", `Bearer ${auth.accessToken}`)
+      .send({ status: "in_progress" });
+
+    const taskBCompleted = await request(app)
+      .patch(`/api/tasks/${taskBId}/status`)
+      .set("Authorization", `Bearer ${auth.accessToken}`)
+      .send({ status: "completed" });
+
+    expect(taskBInProgress.status).toBe(200);
+    expect(taskBCompleted.status).toBe(200);
+
+    const taskCInProgress = await request(app)
+      .patch(`/api/tasks/${taskCId}/status`)
+      .set("Authorization", `Bearer ${auth.accessToken}`)
+      .send({ status: "in_progress" });
+
+    const taskCBlocked = await request(app)
+      .patch(`/api/tasks/${taskCId}/status`)
+      .set("Authorization", `Bearer ${auth.accessToken}`)
+      .send({ status: "blocked" });
+
+    expect(taskCInProgress.status).toBe(200);
+    expect(taskCBlocked.status).toBe(200);
+
+    const invalidTransition = await request(app)
+      .patch(`/api/tasks/${taskAId}/status`)
+      .set("Authorization", `Bearer ${auth.accessToken}`)
+      .send({ status: "completed" });
+
+    expect(invalidTransition.status).toBe(409);
+
+    const completedTasks = await request(app)
+      .get(`/api/tasks?projectId=${projectId}&status=completed`)
+      .set("Authorization", `Bearer ${auth.accessToken}`);
+
+    const overdueTasks = await request(app)
+      .get(`/api/tasks?projectId=${projectId}&overdue=true`)
+      .set("Authorization", `Bearer ${auth.accessToken}`);
+
+    expect(completedTasks.status).toBe(200);
+    expect(overdueTasks.status).toBe(200);
+    expect(completedTasks.body.data.length).toBe(1);
+    expect(overdueTasks.body.data.length).toBe(1);
+
+    const projectDetail = await request(app)
+      .get(`/api/projects/${projectId}`)
+      .set("Authorization", `Bearer ${auth.accessToken}`);
+
+    expect(projectDetail.status).toBe(200);
+    expect(projectDetail.body.data.task_summary).toEqual({
+      total: 3,
+      pending: 1,
+      in_progress: 0,
+      completed: 1,
+      blocked: 1,
+      overdue: 1
+    });
+
+    const deleteTaskA = await request(app)
+      .delete(`/api/tasks/${taskAId}`)
+      .set("Authorization", `Bearer ${auth.accessToken}`);
+
+    expect(deleteTaskA.status).toBe(204);
+
+    const getDeletedTaskA = await request(app)
+      .get(`/api/tasks/${taskAId}`)
+      .set("Authorization", `Bearer ${auth.accessToken}`);
+
+    expect(getDeletedTaskA.status).toBe(404);
+
+    const taskActionCounts = await pool.query<{ action: string; count: string }>(
+      `SELECT action, COUNT(*)::text AS count
+       FROM activity_log
+       WHERE action IN ('task_created', 'task_updated', 'task_status_changed', 'task_deleted')
+       GROUP BY action`
+    );
+
+    const counts = Object.fromEntries(
+      taskActionCounts.rows.map((row) => [row.action, Number(row.count)])
+    );
+
+    expect(counts.task_created).toBe(3);
+    expect(counts.task_updated).toBe(1);
+    expect(counts.task_status_changed).toBe(4);
+    expect(counts.task_deleted).toBe(1);
+  });
 });

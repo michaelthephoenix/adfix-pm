@@ -6,7 +6,7 @@ import { insertActivityLog } from "../services/activity-log.service.js";
 import {
   createProject,
   deleteProject,
-  getProjectById,
+  getProjectDetailById,
   listProjects,
   transitionProjectPhase,
   updateProject
@@ -75,7 +75,7 @@ projectsRouter.get("/:id", async (req, res) => {
     return res.status(400).json({ error: "Invalid project id" });
   }
 
-  const project = await getProjectById(parsedParams.data.id);
+  const project = await getProjectDetailById(parsedParams.data.id);
   if (!project) {
     return res.status(404).json({ error: "Project not found" });
   }

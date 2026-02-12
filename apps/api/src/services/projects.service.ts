@@ -35,6 +35,18 @@ type TransitionResult =
   | { ok: true; project: ProjectRow & { client_name: string } }
   | { ok: false; reason: "not_found" | "invalid_transition" };
 
+type ProjectDetail = ProjectRow & {
+  client_name: string;
+  task_summary: {
+    total: number;
+    pending: number;
+    in_progress: number;
+    completed: number;
+    blocked: number;
+    overdue: number;
+  };
+};
+
 export async function listProjects(filter: ListProjectsFilter) {
   const where: string[] = ["p.deleted_at IS NULL"];
   const values: Array<string> = [];
@@ -110,6 +122,73 @@ export async function getProjectById(projectId: string) {
   );
 
   return result.rows[0] ?? null;
+}
+
+export async function getProjectDetailById(projectId: string): Promise<ProjectDetail | null> {
+  const projectResult = await pool.query<ProjectRow & { client_name: string }>(
+    `SELECT
+       p.id,
+       p.client_id,
+       c.name AS client_name,
+       p.name,
+       p.description,
+       p.current_phase,
+       p.priority,
+       p.budget,
+       p.start_date,
+       p.deadline,
+       p.created_by,
+       p.created_at,
+       p.updated_at
+     FROM projects p
+     INNER JOIN clients c ON c.id = p.client_id AND c.deleted_at IS NULL
+     WHERE p.id = $1
+       AND p.deleted_at IS NULL
+     LIMIT 1`,
+    [projectId]
+  );
+
+  const project = projectResult.rows[0];
+  if (!project) return null;
+
+  const summaryResult = await pool.query<{
+    total: string;
+    pending: string;
+    in_progress: string;
+    completed: string;
+    blocked: string;
+    overdue: string;
+  }>(
+    `SELECT
+       COUNT(*)::int::text AS total,
+       COUNT(*) FILTER (WHERE status = 'pending')::int::text AS pending,
+       COUNT(*) FILTER (WHERE status = 'in_progress')::int::text AS in_progress,
+       COUNT(*) FILTER (WHERE status = 'completed')::int::text AS completed,
+       COUNT(*) FILTER (WHERE status = 'blocked')::int::text AS blocked,
+       COUNT(*) FILTER (
+         WHERE due_date IS NOT NULL
+           AND due_date < CURRENT_DATE
+           AND status <> 'completed'
+       )::int::text AS overdue
+     FROM tasks
+     WHERE project_id = $1
+       AND deleted_at IS NULL`,
+    [projectId]
+  );
+
+  const summary = summaryResult.rows[0];
+
+  return {
+    ...project,
+    task_summary: {
+      total: Number(summary.total),
+      pending: Number(summary.pending),
+      in_progress: Number(summary.in_progress),
+      completed: Number(summary.completed),
+      blocked: Number(summary.blocked),
+      overdue: Number(summary.overdue)
+    }
+  };
 }
 
 export async function createProject(input: {
