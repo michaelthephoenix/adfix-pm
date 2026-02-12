@@ -19,7 +19,7 @@ type SearchResult = {
   clients: SearchResultItem[];
 };
 
-async function searchProjects(term: string, limit: number): Promise<SearchResultItem[]> {
+async function searchProjects(term: string, limit: number, userId: string): Promise<SearchResultItem[]> {
   const result = await pool.query<{
     id: string;
     name: string;
@@ -37,13 +37,22 @@ async function searchProjects(term: string, limit: number): Promise<SearchResult
      INNER JOIN clients c ON c.id = p.client_id AND c.deleted_at IS NULL
      WHERE p.deleted_at IS NULL
        AND (
+         p.created_by = $3
+         OR EXISTS (
+           SELECT 1
+           FROM project_team pt
+           WHERE pt.project_id = p.id
+             AND pt.user_id = $3
+         )
+       )
+       AND (
          p.name ILIKE $1
          OR COALESCE(p.description, '') ILIKE $1
          OR c.name ILIKE $1
        )
      ORDER BY p.updated_at DESC
      LIMIT $2`,
-    [term, limit]
+    [term, limit, userId]
   );
 
   return result.rows.map((row) => ({
@@ -57,7 +66,7 @@ async function searchProjects(term: string, limit: number): Promise<SearchResult
   }));
 }
 
-async function searchTasks(term: string, limit: number): Promise<SearchResultItem[]> {
+async function searchTasks(term: string, limit: number, userId: string): Promise<SearchResultItem[]> {
   const result = await pool.query<{
     id: string;
     project_id: string;
@@ -73,13 +82,23 @@ async function searchTasks(term: string, limit: number): Promise<SearchResultIte
        t.phase
      FROM tasks t
      WHERE t.deleted_at IS NULL
+       AND EXISTS (
+         SELECT 1
+         FROM projects p
+         LEFT JOIN project_team pt
+           ON pt.project_id = p.id
+          AND pt.user_id = $3
+         WHERE p.id = t.project_id
+           AND p.deleted_at IS NULL
+           AND (p.created_by = $3 OR pt.user_id IS NOT NULL)
+       )
        AND (
          t.title ILIKE $1
          OR COALESCE(t.description, '') ILIKE $1
        )
      ORDER BY t.updated_at DESC
      LIMIT $2`,
-    [term, limit]
+    [term, limit, userId]
   );
 
   return result.rows.map((row) => ({
@@ -93,7 +112,7 @@ async function searchTasks(term: string, limit: number): Promise<SearchResultIte
   }));
 }
 
-async function searchFiles(term: string, limit: number): Promise<SearchResultItem[]> {
+async function searchFiles(term: string, limit: number, userId: string): Promise<SearchResultItem[]> {
   const result = await pool.query<{
     id: string;
     project_id: string;
@@ -109,13 +128,23 @@ async function searchFiles(term: string, limit: number): Promise<SearchResultIte
        f.storage_type
      FROM files f
      WHERE f.deleted_at IS NULL
+       AND EXISTS (
+         SELECT 1
+         FROM projects p
+         LEFT JOIN project_team pt
+           ON pt.project_id = p.id
+          AND pt.user_id = $3
+         WHERE p.id = f.project_id
+           AND p.deleted_at IS NULL
+           AND (p.created_by = $3 OR pt.user_id IS NOT NULL)
+       )
        AND (
          f.file_name ILIKE $1
          OR f.file_type::text ILIKE $1
        )
      ORDER BY f.created_at DESC
      LIMIT $2`,
-    [term, limit]
+    [term, limit, userId]
   );
 
   return result.rows.map((row) => ({
@@ -129,7 +158,7 @@ async function searchFiles(term: string, limit: number): Promise<SearchResultIte
   }));
 }
 
-async function searchClients(term: string, limit: number): Promise<SearchResultItem[]> {
+async function searchClients(term: string, limit: number, userId: string): Promise<SearchResultItem[]> {
   const result = await pool.query<{
     id: string;
     name: string;
@@ -141,6 +170,16 @@ async function searchClients(term: string, limit: number): Promise<SearchResultI
        c.company
      FROM clients c
      WHERE c.deleted_at IS NULL
+       AND EXISTS (
+         SELECT 1
+         FROM projects p
+         LEFT JOIN project_team pt
+           ON pt.project_id = p.id
+          AND pt.user_id = $3
+         WHERE p.client_id = c.id
+           AND p.deleted_at IS NULL
+           AND (p.created_by = $3 OR pt.user_id IS NOT NULL)
+       )
        AND (
          c.name ILIKE $1
          OR COALESCE(c.company, '') ILIKE $1
@@ -148,7 +187,7 @@ async function searchClients(term: string, limit: number): Promise<SearchResultI
        )
      ORDER BY c.updated_at DESC
      LIMIT $2`,
-    [term, limit]
+    [term, limit, userId]
   );
 
   return result.rows.map((row) => ({
@@ -166,17 +205,25 @@ export async function runSearch(input: {
   query: string;
   scope: SearchScope;
   limit: number;
+  userId: string;
 }): Promise<SearchResult> {
   const term = `%${input.query.trim()}%`;
   const scope = input.scope;
 
   const [projects, tasks, files, clients] = await Promise.all([
-    scope === "all" || scope === "projects" ? searchProjects(term, input.limit) : Promise.resolve([]),
-    scope === "all" || scope === "tasks" ? searchTasks(term, input.limit) : Promise.resolve([]),
-    scope === "all" || scope === "files" ? searchFiles(term, input.limit) : Promise.resolve([]),
-    scope === "all" || scope === "clients" ? searchClients(term, input.limit) : Promise.resolve([])
+    scope === "all" || scope === "projects"
+      ? searchProjects(term, input.limit, input.userId)
+      : Promise.resolve([]),
+    scope === "all" || scope === "tasks"
+      ? searchTasks(term, input.limit, input.userId)
+      : Promise.resolve([]),
+    scope === "all" || scope === "files"
+      ? searchFiles(term, input.limit, input.userId)
+      : Promise.resolve([]),
+    scope === "all" || scope === "clients"
+      ? searchClients(term, input.limit, input.userId)
+      : Promise.resolve([])
   ]);
 
   return { projects, tasks, files, clients };
 }
-

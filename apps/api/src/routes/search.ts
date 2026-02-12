@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { requireAuth } from "../middleware/auth.js";
+import type { AuthenticatedRequest } from "../types/http.js";
 import { runSearch } from "../services/search.service.js";
 import { sendValidationError } from "../utils/validation.js";
 
@@ -14,7 +15,11 @@ const searchQuerySchema = z.object({
 
 searchRouter.use(requireAuth);
 
-searchRouter.get("/", async (req, res) => {
+searchRouter.get("/", async (req: AuthenticatedRequest, res) => {
+  if (!req.user) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
   const parsed = searchQuerySchema.safeParse(req.query);
   if (!parsed.success) {
     return sendValidationError(res, "Invalid search query", parsed.error);
@@ -23,7 +28,8 @@ searchRouter.get("/", async (req, res) => {
   const data = await runSearch({
     query: parsed.data.q,
     scope: parsed.data.scope,
-    limit: parsed.data.limit
+    limit: parsed.data.limit,
+    userId: req.user.id
   });
 
   return res.status(200).json({ data });

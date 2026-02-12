@@ -1126,6 +1126,146 @@ describe("API integration", () => {
     expect(projectsOnlySearch.body.data.clients.length).toBe(0);
   });
 
+  it("rbac: analytics and search are scoped to accessible projects", async () => {
+    const ownerAuth = await login();
+
+    const outsiderEmail = "outsider@adfix.local";
+    const outsiderPassword = "OutsiderPass123!";
+    const outsiderPasswordHash = await bcrypt.hash(outsiderPassword, 12);
+    await pool.query(
+      `INSERT INTO users (email, name, password_hash, is_active, created_at, updated_at)
+       VALUES ($1, 'Outsider User', $2, TRUE, NOW(), NOW())`,
+      [outsiderEmail, outsiderPasswordHash]
+    );
+    const outsiderAuth = await loginAs(outsiderEmail, outsiderPassword);
+
+    const ownerClientResponse = await request(app)
+      .post("/api/clients")
+      .set("Authorization", `Bearer ${ownerAuth.accessToken}`)
+      .send({ name: "Owner Scoped Client" });
+    expect(ownerClientResponse.status).toBe(201);
+    const ownerClientId = ownerClientResponse.body.data.id as string;
+
+    const ownerProjectResponse = await request(app)
+      .post("/api/projects")
+      .set("Authorization", `Bearer ${ownerAuth.accessToken}`)
+      .send({
+        clientId: ownerClientId,
+        name: "Scoped Project Alpha",
+        description: "Scoped keyword",
+        startDate: "2026-02-12",
+        deadline: "2026-04-12"
+      });
+    expect(ownerProjectResponse.status).toBe(201);
+    const ownerProjectId = ownerProjectResponse.body.data.id as string;
+
+    const ownerTaskResponse = await request(app)
+      .post("/api/tasks")
+      .set("Authorization", `Bearer ${ownerAuth.accessToken}`)
+      .send({
+        projectId: ownerProjectId,
+        title: "Scoped Task Alpha",
+        description: "Scoped keyword task",
+        phase: "production"
+      });
+    expect(ownerTaskResponse.status).toBe(201);
+
+    const ownerFileResponse = await request(app)
+      .post("/api/files/upload")
+      .set("Authorization", `Bearer ${ownerAuth.accessToken}`)
+      .send({
+        projectId: ownerProjectId,
+        fileName: "scoped-alpha.pdf",
+        fileType: "proposal",
+        storageType: "s3",
+        objectKey: "projects/owner/scoped-alpha.pdf",
+        mimeType: "application/pdf",
+        fileSize: 1000
+      });
+    expect(ownerFileResponse.status).toBe(201);
+
+    const outsiderClientResponse = await request(app)
+      .post("/api/clients")
+      .set("Authorization", `Bearer ${outsiderAuth.accessToken}`)
+      .send({ name: "Outsider Scoped Client" });
+    expect(outsiderClientResponse.status).toBe(201);
+    const outsiderClientId = outsiderClientResponse.body.data.id as string;
+
+    const outsiderProjectResponse = await request(app)
+      .post("/api/projects")
+      .set("Authorization", `Bearer ${outsiderAuth.accessToken}`)
+      .send({
+        clientId: outsiderClientId,
+        name: "Scoped Project Beta",
+        description: "Scoped keyword",
+        startDate: "2026-02-12",
+        deadline: "2026-04-12"
+      });
+    expect(outsiderProjectResponse.status).toBe(201);
+    const outsiderProjectId = outsiderProjectResponse.body.data.id as string;
+
+    const outsiderTaskResponse = await request(app)
+      .post("/api/tasks")
+      .set("Authorization", `Bearer ${outsiderAuth.accessToken}`)
+      .send({
+        projectId: outsiderProjectId,
+        title: "Scoped Task Beta",
+        description: "Scoped keyword task",
+        phase: "production"
+      });
+    expect(outsiderTaskResponse.status).toBe(201);
+
+    const outsiderFileResponse = await request(app)
+      .post("/api/files/upload")
+      .set("Authorization", `Bearer ${outsiderAuth.accessToken}`)
+      .send({
+        projectId: outsiderProjectId,
+        fileName: "scoped-beta.pdf",
+        fileType: "proposal",
+        storageType: "s3",
+        objectKey: "projects/outsider/scoped-beta.pdf",
+        mimeType: "application/pdf",
+        fileSize: 1000
+      });
+    expect(outsiderFileResponse.status).toBe(201);
+
+    const ownerSearch = await request(app)
+      .get("/api/search")
+      .query({ q: "scoped", scope: "all" })
+      .set("Authorization", `Bearer ${ownerAuth.accessToken}`);
+    expect(ownerSearch.status).toBe(200);
+    expect(ownerSearch.body.data.projects.length).toBe(1);
+    expect(ownerSearch.body.data.tasks.length).toBe(1);
+    expect(ownerSearch.body.data.files.length).toBe(1);
+    expect(ownerSearch.body.data.clients.length).toBe(1);
+    expect(ownerSearch.body.data.projects[0].id).toBe(ownerProjectId);
+
+    const outsiderSearch = await request(app)
+      .get("/api/search")
+      .query({ q: "scoped", scope: "all" })
+      .set("Authorization", `Bearer ${outsiderAuth.accessToken}`);
+    expect(outsiderSearch.status).toBe(200);
+    expect(outsiderSearch.body.data.projects.length).toBe(1);
+    expect(outsiderSearch.body.data.tasks.length).toBe(1);
+    expect(outsiderSearch.body.data.files.length).toBe(1);
+    expect(outsiderSearch.body.data.clients.length).toBe(1);
+    expect(outsiderSearch.body.data.projects[0].id).toBe(outsiderProjectId);
+
+    const ownerProjectsAnalytics = await request(app)
+      .get("/api/analytics/projects")
+      .set("Authorization", `Bearer ${ownerAuth.accessToken}`);
+    expect(ownerProjectsAnalytics.status).toBe(200);
+    expect(ownerProjectsAnalytics.body.data.length).toBe(1);
+    expect(ownerProjectsAnalytics.body.data[0].projectId).toBe(ownerProjectId);
+
+    const outsiderProjectsAnalytics = await request(app)
+      .get("/api/analytics/projects")
+      .set("Authorization", `Bearer ${outsiderAuth.accessToken}`);
+    expect(outsiderProjectsAnalytics.status).toBe(200);
+    expect(outsiderProjectsAnalytics.body.data.length).toBe(1);
+    expect(outsiderProjectsAnalytics.body.data[0].projectId).toBe(outsiderProjectId);
+  });
+
   it("tasks: bulk status update and bulk delete", async () => {
     const auth = await login();
 

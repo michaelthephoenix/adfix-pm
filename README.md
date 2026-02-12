@@ -57,6 +57,7 @@ Monorepo scaffold for the Adfix Project Management System.
   - `member`: read + tasks/files write
   - `manager`: member permissions + project update + team management
   - `owner`: full permissions including project delete
+- `search` and `analytics` responses are scoped to projects the requester can access.
 
 ## Current Phase
 - Phase 0 foundation scaffolding
