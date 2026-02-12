@@ -279,6 +279,25 @@ export function buildOpenApiSpec(baseUrl: string) {
           responses: { "200": { description: "Task status updated" }, ...errorResponses }
         }
       }),
+      "/tasks/{id}/comments": withAuth({
+        get: {
+          tags: ["tasks"],
+          summary: "List task comments",
+          responses: { "200": { description: "Task comments list" }, ...errorResponses }
+        },
+        post: {
+          tags: ["tasks"],
+          summary: "Create task comment",
+          responses: { "201": { description: "Task comment created" }, ...errorResponses }
+        }
+      }),
+      "/tasks/{id}/comments/{commentId}": withAuth({
+        delete: {
+          tags: ["tasks"],
+          summary: "Delete task comment",
+          responses: { "204": { description: "Task comment deleted" }, ...errorResponses }
+        }
+      }),
       "/tasks/bulk/status": withAuth({
         post: {
           tags: ["tasks"],

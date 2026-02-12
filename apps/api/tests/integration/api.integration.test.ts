@@ -19,7 +19,7 @@ const adminUser = {
 
 async function resetDatabase() {
   await pool.query(
-    `TRUNCATE TABLE activity_log, project_team, files, tasks, projects, auth_sessions, clients, users RESTART IDENTITY CASCADE`
+    `TRUNCATE TABLE activity_log, project_team, task_comments, files, tasks, projects, auth_sessions, clients, users RESTART IDENTITY CASCADE`
   );
 
   const passwordHash = await bcrypt.hash(adminUser.password, 12);
@@ -79,6 +79,7 @@ describe("API integration", () => {
     expect(docsResponse.body.info.title).toBe("Adfix PM API");
     expect(docsResponse.body.paths).toHaveProperty("/users/audit-logs");
     expect(docsResponse.body.paths).toHaveProperty("/tasks/bulk/status");
+    expect(docsResponse.body.paths).toHaveProperty("/tasks/{id}/comments");
     expect(docsResponse.body.components.schemas).toHaveProperty("ErrorResponse");
   });
 
@@ -464,6 +465,24 @@ describe("API integration", () => {
     const taskBId = taskB.body.data.id as string;
     const taskCId = taskC.body.data.id as string;
 
+    const createComment = await request(app)
+      .post(`/api/tasks/${taskBId}/comments`)
+      .set("Authorization", `Bearer ${auth.accessToken}`)
+      .send({ body: "Initial note on task B" });
+
+    expect(createComment.status).toBe(201);
+    expect(createComment.body.data.body).toBe("Initial note on task B");
+    const taskBCommentId = createComment.body.data.id as string;
+
+    const listComments = await request(app)
+      .get(`/api/tasks/${taskBId}/comments`)
+      .set("Authorization", `Bearer ${auth.accessToken}`);
+
+    expect(listComments.status).toBe(200);
+    expect(listComments.body.data.length).toBe(1);
+    expect(listComments.body.meta.total).toBe(1);
+    expect(listComments.body.data[0].id).toBe(taskBCommentId);
+
     const updateTaskA = await request(app)
       .put(`/api/tasks/${taskAId}`)
       .set("Authorization", `Bearer ${auth.accessToken}`)
@@ -544,10 +563,23 @@ describe("API integration", () => {
 
     expect(getDeletedTaskA.status).toBe(404);
 
+    const deleteComment = await request(app)
+      .delete(`/api/tasks/${taskBId}/comments/${taskBCommentId}`)
+      .set("Authorization", `Bearer ${auth.accessToken}`);
+
+    expect(deleteComment.status).toBe(204);
+
     const taskActionCounts = await pool.query<{ action: string; count: string }>(
       `SELECT action, COUNT(*)::text AS count
        FROM activity_log
-       WHERE action IN ('task_created', 'task_updated', 'task_status_changed', 'task_deleted')
+       WHERE action IN (
+         'task_created',
+         'task_updated',
+         'task_status_changed',
+         'task_deleted',
+         'task_comment_created',
+         'task_comment_deleted'
+       )
        GROUP BY action`
     );
 
@@ -559,6 +591,8 @@ describe("API integration", () => {
     expect(counts.task_updated).toBe(1);
     expect(counts.task_status_changed).toBe(4);
     expect(counts.task_deleted).toBe(1);
+    expect(counts.task_comment_created).toBe(1);
+    expect(counts.task_comment_deleted).toBe(1);
   });
 
   it("files: upload metadata + link + list + delete with activity logs", async () => {
@@ -1164,6 +1198,20 @@ describe("API integration", () => {
     expect(listTasksResponse.status).toBe(200);
     expect(listTasksResponse.body.data.length).toBe(1);
 
+    const ownerComment = await request(app)
+      .post(`/api/tasks/${taskId}/comments`)
+      .set("Authorization", `Bearer ${ownerAuth.accessToken}`)
+      .send({ body: "Owner-only mutation note" });
+    expect(ownerComment.status).toBe(201);
+    const commentId = ownerComment.body.data.id as string;
+
+    const viewerCommentsList = await request(app)
+      .get(`/api/tasks/${taskId}/comments`)
+      .set("Authorization", `Bearer ${viewerAuth.accessToken}`);
+    expect(viewerCommentsList.status).toBe(200);
+    expect(viewerCommentsList.body.data.length).toBe(1);
+    expect(viewerCommentsList.body.data[0].id).toBe(commentId);
+
     const listFilesResponse = await request(app)
       .get(`/api/files/project/${projectId}`)
       .set("Authorization", `Bearer ${viewerAuth.accessToken}`);
@@ -1190,6 +1238,17 @@ describe("API integration", () => {
       .delete(`/api/tasks/${taskId}`)
       .set("Authorization", `Bearer ${viewerAuth.accessToken}`);
     expect(viewerTaskDelete.status).toBe(403);
+
+    const viewerCommentCreate = await request(app)
+      .post(`/api/tasks/${taskId}/comments`)
+      .set("Authorization", `Bearer ${viewerAuth.accessToken}`)
+      .send({ body: "viewer should not comment" });
+    expect(viewerCommentCreate.status).toBe(403);
+
+    const viewerCommentDelete = await request(app)
+      .delete(`/api/tasks/${taskId}/comments/${commentId}`)
+      .set("Authorization", `Bearer ${viewerAuth.accessToken}`);
+    expect(viewerCommentDelete.status).toBe(403);
 
     const viewerFileUpload = await request(app)
       .post("/api/files/upload")

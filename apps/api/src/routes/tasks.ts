@@ -14,6 +14,11 @@ import {
   updateTask
 } from "../services/tasks.service.js";
 import { getProjectById } from "../services/projects.service.js";
+import {
+  createTaskComment,
+  deleteTaskComment,
+  listTaskComments
+} from "../services/task-comments.service.js";
 import { hasProjectPermission } from "../services/rbac.service.js";
 import { logAndSendForbidden } from "../utils/authz.js";
 import { sendConflict, sendNotFound, sendUnauthorized } from "../utils/http-error.js";
@@ -79,6 +84,21 @@ const bulkDeleteSchema = z.object({
 
 const idParamsSchema = z.object({
   id: z.string().uuid()
+});
+
+const taskCommentParamsSchema = z.object({
+  id: z.string().uuid(),
+  commentId: z.string().uuid()
+});
+
+const listTaskCommentsQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).optional().default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).optional().default(20),
+  sortOrder: z.enum(["asc", "desc"]).optional().default("desc")
+});
+
+const createTaskCommentSchema = z.object({
+  body: z.string().trim().min(1).max(5000)
 });
 
 tasksRouter.use(requireAuth);
@@ -254,6 +274,161 @@ tasksRouter.post("/bulk/delete", async (req: AuthenticatedRequest, res) => {
       deletedIds: result.deletedIds
     }
   });
+});
+
+tasksRouter.get("/:id/comments", async (req: AuthenticatedRequest, res) => {
+  const parsedParams = idParamsSchema.safeParse(req.params);
+  if (!parsedParams.success) {
+    return sendValidationError(res, "Invalid task id", parsedParams.error);
+  }
+
+  const parsedQuery = listTaskCommentsQuerySchema.safeParse(req.query);
+  if (!parsedQuery.success) {
+    return sendValidationError(res, "Invalid task comments query", parsedQuery.error);
+  }
+
+  if (!req.user) {
+    return sendUnauthorized(res, "Unauthorized");
+  }
+
+  const task = await getTaskById(parsedParams.data.id);
+  if (!task) {
+    return sendNotFound(res, "Task not found");
+  }
+
+  const canViewTask = await hasProjectPermission({
+    projectId: task.project_id,
+    userId: req.user.id,
+    permission: "project:view"
+  });
+  if (!canViewTask) {
+    return logAndSendForbidden({
+      req,
+      res,
+      permission: "project:view",
+      projectId: task.project_id
+    });
+  }
+
+  const result = await listTaskComments({
+    taskId: task.id,
+    page: parsedQuery.data.page,
+    pageSize: parsedQuery.data.pageSize,
+    sortOrder: parsedQuery.data.sortOrder
+  });
+
+  return res.status(200).json({
+    data: result.rows,
+    meta: {
+      page: parsedQuery.data.page,
+      pageSize: parsedQuery.data.pageSize,
+      sortOrder: parsedQuery.data.sortOrder,
+      total: result.total
+    }
+  });
+});
+
+tasksRouter.post("/:id/comments", async (req: AuthenticatedRequest, res) => {
+  const parsedParams = idParamsSchema.safeParse(req.params);
+  if (!parsedParams.success) {
+    return sendValidationError(res, "Invalid task id", parsedParams.error);
+  }
+
+  const parsedBody = createTaskCommentSchema.safeParse(req.body);
+  if (!parsedBody.success) {
+    return sendValidationError(res, "Invalid task comment payload", parsedBody.error);
+  }
+
+  if (!req.user) {
+    return sendUnauthorized(res, "Unauthorized");
+  }
+
+  const task = await getTaskById(parsedParams.data.id);
+  if (!task) {
+    return sendNotFound(res, "Task not found");
+  }
+
+  const canWriteTask = await hasProjectPermission({
+    projectId: task.project_id,
+    userId: req.user.id,
+    permission: "task:write"
+  });
+  if (!canWriteTask) {
+    return logAndSendForbidden({
+      req,
+      res,
+      permission: "task:write",
+      projectId: task.project_id
+    });
+  }
+
+  const comment = await createTaskComment({
+    taskId: task.id,
+    userId: req.user.id,
+    body: parsedBody.data.body
+  });
+
+  await insertActivityLog({
+    userId: req.user.id,
+    action: "task_comment_created",
+    projectId: task.project_id,
+    details: {
+      taskId: task.id,
+      commentId: comment.id
+    }
+  });
+
+  return res.status(201).json({ data: comment });
+});
+
+tasksRouter.delete("/:id/comments/:commentId", async (req: AuthenticatedRequest, res) => {
+  const parsedParams = taskCommentParamsSchema.safeParse(req.params);
+  if (!parsedParams.success) {
+    return sendValidationError(res, "Invalid task comment id", parsedParams.error);
+  }
+
+  if (!req.user) {
+    return sendUnauthorized(res, "Unauthorized");
+  }
+
+  const task = await getTaskById(parsedParams.data.id);
+  if (!task) {
+    return sendNotFound(res, "Task not found");
+  }
+
+  const canWriteTask = await hasProjectPermission({
+    projectId: task.project_id,
+    userId: req.user.id,
+    permission: "task:write"
+  });
+  if (!canWriteTask) {
+    return logAndSendForbidden({
+      req,
+      res,
+      permission: "task:write",
+      projectId: task.project_id
+    });
+  }
+
+  const deleted = await deleteTaskComment({
+    taskId: task.id,
+    commentId: parsedParams.data.commentId
+  });
+  if (!deleted) {
+    return sendNotFound(res, "Task comment not found");
+  }
+
+  await insertActivityLog({
+    userId: req.user.id,
+    action: "task_comment_deleted",
+    projectId: task.project_id,
+    details: {
+      taskId: task.id,
+      commentId: parsedParams.data.commentId
+    }
+  });
+
+  return res.status(204).send();
 });
 
 tasksRouter.get("/:id", async (req: AuthenticatedRequest, res) => {

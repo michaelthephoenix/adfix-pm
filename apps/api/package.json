@@ -11,6 +11,7 @@
     "db:migrate": "tsx scripts/migrate.ts",
     "db:seed": "tsx scripts/seed.ts",
     "db:seed:demo": "tsx scripts/seed.ts --profile=demo",
+    "openapi:export": "tsx scripts/export-openapi.ts",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage"
   },

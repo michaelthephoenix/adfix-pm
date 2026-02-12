@@ -23,6 +23,7 @@ Monorepo scaffold for the Adfix Project Management System.
 - `npm run db:migrate`: apply pending SQL migrations from `apps/api/db/migrations`
 - `npm run db:seed`: upsert the default admin user
 - `npm run db:seed:demo`: seed admin + demo client/project/tasks
+- `npm run openapi:export`: export versioned OpenAPI spec to `apps/api/openapi/openapi.v1.json`
 - `npm run typecheck`: run TypeScript checks for API + scripts
 - `npm run test:api`: run integration tests (auth, clients, projects, phase transitions, activity logs)
 - `npm run test:api:coverage`: run integration tests with coverage thresholds
@@ -49,6 +50,7 @@ Monorepo scaffold for the Adfix Project Management System.
 - Docs landing pages:
   - `GET /api/v1/docs`
   - `GET /api/docs`
+- CI uploads OpenAPI artifact: `api-openapi-v1` (`apps/api/openapi/openapi.v1.json`)
 - Spec now includes all active route groups (`auth`, `clients`, `projects`, `tasks`, `files`, `analytics`, `search`, `users`, admin controls).
 - Liveness endpoints:
   - `/api/health`
@@ -81,6 +83,15 @@ Monorepo scaffold for the Adfix Project Management System.
   - `page`, `pageSize`
   - `sortBy`, `sortOrder`
 - List responses include these values in `meta` so frontend table state can be synchronized.
+
+## Task Comments
+- Task notes/comments endpoints are available:
+  - `GET /api/tasks/:id/comments`
+  - `POST /api/tasks/:id/comments`
+  - `DELETE /api/tasks/:id/comments/:commentId`
+- RBAC behavior:
+  - `viewer`: list comments only
+  - `member`/`manager`/`owner`: create and delete comments
 
 ## Seed Profiles
 - `SEED_PROFILE=admin_only` (default): only admin user
