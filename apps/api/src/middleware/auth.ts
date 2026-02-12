@@ -24,7 +24,8 @@ export function requireAuth(req: AuthenticatedRequest, res: Response, next: Next
     req.user = {
       id: payload.userId,
       email: payload.email,
-      name: payload.name
+      name: payload.name,
+      isAdmin: payload.isAdmin
     };
 
     return next();

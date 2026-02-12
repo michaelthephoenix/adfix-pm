@@ -25,8 +25,8 @@ async function resetDatabase() {
   const passwordHash = await bcrypt.hash(adminUser.password, 12);
 
   await pool.query(
-    `INSERT INTO users (email, name, password_hash, is_active, created_at, updated_at)
-     VALUES ($1, $2, $3, TRUE, NOW(), NOW())`,
+    `INSERT INTO users (email, name, password_hash, is_active, is_admin, created_at, updated_at)
+     VALUES ($1, $2, $3, TRUE, TRUE, NOW(), NOW())`,
     [adminUser.email, adminUser.name, passwordHash]
   );
 }
@@ -832,6 +832,91 @@ describe("API integration", () => {
     expect(invalidPayloadResponse.status).toBe(400);
     expect(invalidPayloadResponse.body.error).toBe("Invalid user payload");
     expect(invalidPayloadResponse.body.details).toHaveProperty("fieldErrors");
+  });
+
+  it("admin controls: update user status, reset project roles, and query audit logs", async () => {
+    const adminAuth = await login();
+    const meResponse = await request(app)
+      .get("/api/auth/me")
+      .set("Authorization", `Bearer ${adminAuth.accessToken}`);
+    expect(meResponse.status).toBe(200);
+    const adminUserId = meResponse.body.user.id as string;
+
+    const memberPasswordHash = await bcrypt.hash("MemberPass123!", 12);
+    const memberInsert = await pool.query<{ id: string }>(
+      `INSERT INTO users (email, name, password_hash, is_active, created_at, updated_at)
+       VALUES ('member-admin-controls@adfix.local', 'Member Controls', $1, TRUE, NOW(), NOW())
+       RETURNING id`,
+      [memberPasswordHash]
+    );
+    const memberId = memberInsert.rows[0].id;
+
+    const outsiderPasswordHash = await bcrypt.hash("OutsiderPass123!", 12);
+    await pool.query(
+      `INSERT INTO users (email, name, password_hash, is_active, created_at, updated_at)
+       VALUES ('outsider-admin-controls@adfix.local', 'Outsider Controls', $1, TRUE, NOW(), NOW())`,
+      [outsiderPasswordHash]
+    );
+    const outsiderAuth = await loginAs("outsider-admin-controls@adfix.local", "OutsiderPass123!");
+
+    const clientResponse = await request(app)
+      .post("/api/clients")
+      .set("Authorization", `Bearer ${adminAuth.accessToken}`)
+      .send({ name: "Admin Controls Client" });
+    expect(clientResponse.status).toBe(201);
+    const clientId = clientResponse.body.data.id as string;
+
+    const projectResponse = await request(app)
+      .post("/api/projects")
+      .set("Authorization", `Bearer ${adminAuth.accessToken}`)
+      .send({
+        clientId,
+        name: "Admin Controls Project",
+        startDate: "2026-02-12",
+        deadline: "2026-04-10"
+      });
+    expect(projectResponse.status).toBe(201);
+    const projectId = projectResponse.body.data.id as string;
+
+    const addMemberToProject = await request(app)
+      .post(`/api/projects/${projectId}/team`)
+      .set("Authorization", `Bearer ${adminAuth.accessToken}`)
+      .send({ userId: memberId, role: "member" });
+    expect(addMemberToProject.status).toBe(201);
+
+    const outsiderStatusPatch = await request(app)
+      .patch(`/api/users/${memberId}/status`)
+      .set("Authorization", `Bearer ${outsiderAuth.accessToken}`)
+      .send({ isActive: false });
+    expect(outsiderStatusPatch.status).toBe(403);
+
+    const statusPatch = await request(app)
+      .patch(`/api/users/${memberId}/status`)
+      .set("Authorization", `Bearer ${adminAuth.accessToken}`)
+      .send({ isActive: false });
+    expect(statusPatch.status).toBe(200);
+    expect(statusPatch.body.data.is_active).toBe(false);
+
+    const resetRoles = await request(app)
+      .post(`/api/users/${memberId}/project-roles/reset`)
+      .set("Authorization", `Bearer ${adminAuth.accessToken}`)
+      .send({ projectId });
+    expect(resetRoles.status).toBe(200);
+    expect(resetRoles.body.data.removedCount).toBe(1);
+
+    const listTeamAfterReset = await request(app)
+      .get(`/api/projects/${projectId}/team`)
+      .set("Authorization", `Bearer ${adminAuth.accessToken}`);
+    expect(listTeamAfterReset.status).toBe(200);
+    expect(listTeamAfterReset.body.data.length).toBe(0);
+
+    const auditLogsResponse = await request(app)
+      .get("/api/users/audit-logs")
+      .query({ action: "user_status_changed", userId: adminUserId })
+      .set("Authorization", `Bearer ${adminAuth.accessToken}`);
+    expect(auditLogsResponse.status).toBe(200);
+    expect(Array.isArray(auditLogsResponse.body.data)).toBe(true);
+    expect(auditLogsResponse.body.data.length).toBeGreaterThan(0);
   });
 
   it("project team: add/list/remove members with activity logs", async () => {

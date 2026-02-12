@@ -6,9 +6,21 @@ type UserRow = {
   name: string;
   avatar_url: string | null;
   is_active: boolean;
+  is_admin: boolean;
   last_login_at: Date | null;
   created_at: Date;
   updated_at: Date;
+};
+
+type AuditLogRow = {
+  id: string;
+  project_id: string | null;
+  user_id: string | null;
+  action: string;
+  details: Record<string, unknown>;
+  created_at: Date;
+  user_name: string | null;
+  user_email: string | null;
 };
 
 export async function listUsers(input?: { page?: number; pageSize?: number }) {
@@ -24,6 +36,7 @@ export async function listUsers(input?: { page?: number; pageSize?: number }) {
          name,
          avatar_url,
          is_active,
+         is_admin,
          last_login_at,
          created_at,
          updated_at
@@ -54,6 +67,7 @@ export async function getUserById(userId: string) {
        name,
        avatar_url,
        is_active,
+       is_admin,
        last_login_at,
        created_at,
        updated_at
@@ -103,6 +117,7 @@ export async function updateUserProfile(
        name,
        avatar_url,
        is_active,
+       is_admin,
        last_login_at,
        created_at,
        updated_at`,
@@ -110,4 +125,111 @@ export async function updateUserProfile(
   );
 
   return result.rows[0] ?? null;
+}
+
+export async function setUserActiveStatus(userId: string, isActive: boolean) {
+  const result = await pool.query<UserRow>(
+    `UPDATE users
+     SET is_active = $1, updated_at = NOW()
+     WHERE id = $2
+       AND deleted_at IS NULL
+     RETURNING
+       id,
+       email,
+       name,
+       avatar_url,
+       is_active,
+       is_admin,
+       last_login_at,
+       created_at,
+       updated_at`,
+    [isActive, userId]
+  );
+
+  return result.rows[0] ?? null;
+}
+
+export async function resetUserProjectRoles(userId: string, projectId?: string) {
+  const result = await pool.query<{ project_id: string }>(
+    `DELETE FROM project_team
+     WHERE user_id = $1
+       AND ($2::uuid IS NULL OR project_id = $2::uuid)
+     RETURNING project_id`,
+    [userId, projectId ?? null]
+  );
+
+  return {
+    removedCount: result.rowCount,
+    projectIds: result.rows.map((row) => row.project_id)
+  };
+}
+
+export async function listAuditLogs(input: {
+  userId?: string;
+  projectId?: string;
+  action?: string;
+  from?: string;
+  to?: string;
+  page?: number;
+  pageSize?: number;
+}) {
+  const page = input.page ?? 1;
+  const pageSize = input.pageSize ?? 20;
+  const offset = (page - 1) * pageSize;
+
+  const where: string[] = ["1=1"];
+  const values: Array<string> = [];
+
+  if (input.userId) {
+    values.push(input.userId);
+    where.push(`a.user_id = $${values.length}`);
+  }
+  if (input.projectId) {
+    values.push(input.projectId);
+    where.push(`a.project_id = $${values.length}`);
+  }
+  if (input.action) {
+    values.push(input.action);
+    where.push(`a.action = $${values.length}`);
+  }
+  if (input.from) {
+    values.push(input.from);
+    where.push(`a.created_at >= $${values.length}::timestamptz`);
+  }
+  if (input.to) {
+    values.push(input.to);
+    where.push(`a.created_at <= $${values.length}::timestamptz`);
+  }
+
+  const [dataResult, countResult] = await Promise.all([
+    pool.query<AuditLogRow>(
+      `SELECT
+         a.id,
+         a.project_id,
+         a.user_id,
+         a.action,
+         a.details,
+         a.created_at,
+         u.name AS user_name,
+         u.email AS user_email
+       FROM activity_log a
+       LEFT JOIN users u ON u.id = a.user_id
+       WHERE ${where.join(" AND ")}
+       ORDER BY a.created_at DESC
+       LIMIT $${values.length + 1}
+       OFFSET $${values.length + 2}`,
+      [...values, pageSize.toString(), offset.toString()]
+    ),
+    pool.query<{ total: string }>(
+      `SELECT COUNT(*)::text AS total
+       FROM activity_log a
+       WHERE ${where.join(" AND ")}`,
+      values
+    )
+  ]);
+
+  return {
+    rows: dataResult.rows,
+    total: Number(countResult.rows[0]?.total ?? 0)
+  };
 }

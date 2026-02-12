@@ -19,13 +19,14 @@ async function ensureAdminUser() {
 
   await pool.query(
     `
-    INSERT INTO users (email, name, password_hash, is_active)
-    VALUES ($1, $2, $3, TRUE)
+    INSERT INTO users (email, name, password_hash, is_active, is_admin)
+    VALUES ($1, $2, $3, TRUE, TRUE)
     ON CONFLICT (email)
     DO UPDATE
       SET name = EXCLUDED.name,
           password_hash = EXCLUDED.password_hash,
           is_active = TRUE,
+          is_admin = TRUE,
           deleted_at = NULL,
           updated_at = NOW()
     `,

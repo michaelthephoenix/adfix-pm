@@ -16,6 +16,7 @@ type LoginResult = {
     id: string;
     email: string;
     name: string;
+    isAdmin: boolean;
   };
 };
 
@@ -29,9 +30,10 @@ export async function loginWithEmailPassword(input: {
     id: string;
     email: string;
     name: string;
+    is_admin: boolean;
     password_hash: string;
   }>(
-    `SELECT id, email, name, password_hash
+    `SELECT id, email, name, is_admin, password_hash
      FROM users
      WHERE email = $1 AND deleted_at IS NULL AND is_active = TRUE
      LIMIT 1`,
@@ -60,7 +62,12 @@ export async function loginWithEmailPassword(input: {
     [user.id]
   );
 
-  const accessToken = signAccessToken({ userId: user.id, email: user.email, name: user.name });
+  const accessToken = signAccessToken({
+    userId: user.id,
+    email: user.email,
+    name: user.name,
+    isAdmin: user.is_admin
+  });
 
   return {
     accessToken,
@@ -68,7 +75,8 @@ export async function loginWithEmailPassword(input: {
     user: {
       id: user.id,
       email: user.email,
-      name: user.name
+      name: user.name,
+      isAdmin: user.is_admin
     }
   };
 }
@@ -112,8 +120,9 @@ export async function refreshAuthToken(input: {
     id: string;
     email: string;
     name: string;
+    is_admin: boolean;
   }>(
-    `SELECT id, email, name
+    `SELECT id, email, name, is_admin
      FROM users
      WHERE id = $1 AND deleted_at IS NULL AND is_active = TRUE
      LIMIT 1`,
@@ -136,7 +145,12 @@ export async function refreshAuthToken(input: {
     [newSessionId, user.id, refreshTokenHash, input.userAgent ?? null, input.ipAddress ?? null, refreshExpiresAt]
   );
 
-  const accessToken = signAccessToken({ userId: user.id, email: user.email, name: user.name });
+  const accessToken = signAccessToken({
+    userId: user.id,
+    email: user.email,
+    name: user.name,
+    isAdmin: user.is_admin
+  });
 
   return {
     accessToken,
@@ -144,7 +158,8 @@ export async function refreshAuthToken(input: {
     user: {
       id: user.id,
       email: user.email,
-      name: user.name
+      name: user.name,
+      isAdmin: user.is_admin
     }
   };
 }

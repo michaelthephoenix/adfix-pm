@@ -1,8 +1,17 @@
 import { Router } from "express";
 import { z } from "zod";
 import { requireAuth } from "../middleware/auth.js";
+import { requireAdmin } from "../middleware/admin.js";
 import type { AuthenticatedRequest } from "../types/http.js";
-import { getUserById, listUsers, updateUserProfile } from "../services/users.service.js";
+import { insertActivityLog } from "../services/activity-log.service.js";
+import {
+  getUserById,
+  listAuditLogs,
+  listUsers,
+  resetUserProjectRoles,
+  setUserActiveStatus,
+  updateUserProfile
+} from "../services/users.service.js";
 import { sendValidationError } from "../utils/validation.js";
 
 export const usersRouter = Router();
@@ -16,6 +25,16 @@ const usersListQuerySchema = z.object({
   pageSize: z.coerce.number().int().min(1).max(100).optional().default(20)
 });
 
+const auditLogsQuerySchema = z.object({
+  userId: z.string().uuid().optional(),
+  projectId: z.string().uuid().optional(),
+  action: z.string().trim().min(1).max(100).optional(),
+  from: z.string().datetime().optional(),
+  to: z.string().datetime().optional(),
+  page: z.coerce.number().int().min(1).optional().default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).optional().default(20)
+});
+
 const userUpdateSchema = z
   .object({
     name: z.string().trim().min(1).max(255).optional(),
@@ -24,6 +43,14 @@ const userUpdateSchema = z
   .refine((value) => typeof value.name !== "undefined" || typeof value.avatarUrl !== "undefined", {
     message: "At least one field is required"
   });
+
+const userStatusUpdateSchema = z.object({
+  isActive: z.boolean()
+});
+
+const resetRolesSchema = z.object({
+  projectId: z.string().uuid().optional()
+});
 
 usersRouter.use(requireAuth);
 
@@ -34,6 +61,23 @@ usersRouter.get("/", async (req, res) => {
   }
 
   const result = await listUsers(parsedQuery.data);
+  return res.status(200).json({
+    data: result.rows,
+    meta: {
+      page: parsedQuery.data.page,
+      pageSize: parsedQuery.data.pageSize,
+      total: result.total
+    }
+  });
+});
+
+usersRouter.get("/audit-logs", requireAdmin, async (req, res) => {
+  const parsedQuery = auditLogsQuerySchema.safeParse(req.query);
+  if (!parsedQuery.success) {
+    return sendValidationError(res, "Invalid audit logs query", parsedQuery.error);
+  }
+
+  const result = await listAuditLogs(parsedQuery.data);
   return res.status(200).json({
     data: result.rows,
     meta: {
@@ -56,6 +100,84 @@ usersRouter.get("/:id", async (req, res) => {
   }
 
   return res.status(200).json({ data: user });
+});
+
+usersRouter.patch("/:id/status", requireAdmin, async (req: AuthenticatedRequest, res) => {
+  const parsedParams = idParamsSchema.safeParse(req.params);
+  if (!parsedParams.success) {
+    return sendValidationError(res, "Invalid user id", parsedParams.error);
+  }
+
+  const parsedBody = userStatusUpdateSchema.safeParse(req.body);
+  if (!parsedBody.success) {
+    return sendValidationError(res, "Invalid user status payload", parsedBody.error);
+  }
+
+  if (!req.user) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  if (req.user.id === parsedParams.data.id && parsedBody.data.isActive === false) {
+    return res.status(409).json({ error: "Admin cannot deactivate their own account" });
+  }
+
+  const updatedUser = await setUserActiveStatus(parsedParams.data.id, parsedBody.data.isActive);
+  if (!updatedUser) {
+    return res.status(404).json({ error: "User not found" });
+  }
+
+  await insertActivityLog({
+    userId: req.user.id,
+    action: "user_status_changed",
+    projectId: null,
+    details: {
+      targetUserId: parsedParams.data.id,
+      isActive: parsedBody.data.isActive
+    }
+  });
+
+  return res.status(200).json({ data: updatedUser });
+});
+
+usersRouter.post("/:id/project-roles/reset", requireAdmin, async (req: AuthenticatedRequest, res) => {
+  const parsedParams = idParamsSchema.safeParse(req.params);
+  if (!parsedParams.success) {
+    return sendValidationError(res, "Invalid user id", parsedParams.error);
+  }
+
+  const parsedBody = resetRolesSchema.safeParse(req.body ?? {});
+  if (!parsedBody.success) {
+    return sendValidationError(res, "Invalid role reset payload", parsedBody.error);
+  }
+
+  if (!req.user) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  const targetUser = await getUserById(parsedParams.data.id);
+  if (!targetUser) {
+    return res.status(404).json({ error: "User not found" });
+  }
+
+  const result = await resetUserProjectRoles(parsedParams.data.id, parsedBody.data.projectId);
+
+  await insertActivityLog({
+    userId: req.user.id,
+    action: "user_project_roles_reset",
+    projectId: parsedBody.data.projectId ?? null,
+    details: {
+      targetUserId: parsedParams.data.id,
+      projectId: parsedBody.data.projectId ?? null,
+      removedCount: result.removedCount
+    }
+  });
+
+  return res.status(200).json({
+    data: {
+      removedCount: result.removedCount,
+      projectIds: result.projectIds
+    }
+  });
 });
 
 usersRouter.put("/:id", async (req: AuthenticatedRequest, res) => {

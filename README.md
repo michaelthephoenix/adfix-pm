@@ -60,6 +60,14 @@ Monorepo scaffold for the Adfix Project Management System.
 - `search` and `analytics` responses are scoped to projects the requester can access.
 - RBAC denials are audit-logged as `authz_denied` in `activity_log`.
 
+## Admin Controls
+- Users table now includes `is_admin` (migration: `0002_admin_controls.sql`).
+- Seeded admin user is marked as `is_admin = true`.
+- Admin-only user endpoints:
+  - `GET /api/users/audit-logs`
+  - `PATCH /api/users/:id/status`
+  - `POST /api/users/:id/project-roles/reset`
+
 ## Current Phase
 - Phase 0 foundation scaffolding
 - Initial schema migration in `apps/api/db/migrations/0001_init.sql`
