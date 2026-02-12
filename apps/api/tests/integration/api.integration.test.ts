@@ -104,6 +104,26 @@ describe("API integration", () => {
     expect(loginResponse.body.accessToken).toBeTypeOf("string");
   });
 
+  it("public: CORS preflight allows configured origins and blocks unknown origins", async () => {
+    const allowedPreflight = await request(app)
+      .options("/api/v1/auth/login")
+      .set("Origin", "http://localhost:3000")
+      .set("Access-Control-Request-Method", "POST")
+      .set("Access-Control-Request-Headers", "authorization,content-type");
+
+    expect(allowedPreflight.status).toBe(204);
+    expect(allowedPreflight.headers["access-control-allow-origin"]).toBe("http://localhost:3000");
+    expect(allowedPreflight.headers["access-control-allow-methods"]).toContain("POST");
+
+    const deniedPreflight = await request(app)
+      .options("/api/v1/auth/login")
+      .set("Origin", "https://untrusted.example.com")
+      .set("Access-Control-Request-Method", "POST");
+
+    expect(deniedPreflight.status).toBe(403);
+    expect(deniedPreflight.body.code).toBe("CORS_ORIGIN_DENIED");
+  });
+
   it("auth: login, me, refresh, logout, logout-all", async () => {
     const firstLogin = await login();
 

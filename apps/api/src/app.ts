@@ -14,6 +14,7 @@ import { searchRouter } from "./routes/search.js";
 import { apiRateLimiter, authRateLimiter } from "./middleware/rate-limit.js";
 import { errorHandler, notFoundHandler } from "./middleware/errors.js";
 import { requestIdMiddleware } from "./middleware/request-id.js";
+import { corsMiddleware } from "./middleware/cors.js";
 
 morgan.token("request-id", (_req, res) => {
   const headerValue = res.getHeader("x-request-id");
@@ -25,6 +26,7 @@ export function createApp() {
 
   app.use(helmet());
   app.use(requestIdMiddleware);
+  app.use(corsMiddleware);
   if (process.env.NODE_ENV !== "test") {
     app.use(
       morgan(":method :url :status :res[content-length] - :response-time ms req_id=:request-id")

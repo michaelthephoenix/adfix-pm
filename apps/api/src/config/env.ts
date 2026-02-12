@@ -21,6 +21,7 @@ const envSchema = z.object({
   AUTH_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(10),
   API_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60_000),
   API_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(120),
+  CORS_ALLOWED_ORIGINS: z.string().default("http://localhost:3000,http://localhost:5173"),
   SEED_PROFILE: z.enum(["admin_only", "demo"]).default("admin_only")
 });
 

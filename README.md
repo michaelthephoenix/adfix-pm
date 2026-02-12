@@ -32,6 +32,13 @@ Monorepo scaffold for the Adfix Project Management System.
 - Protected API routes: `API_RATE_LIMIT_MAX` per `API_RATE_LIMIT_WINDOW_MS`
 - In `NODE_ENV=test`, rate limiting is skipped so tests remain deterministic.
 
+## CORS
+- Browser origins are controlled by `CORS_ALLOWED_ORIGINS` (comma-separated).
+- Default local dev origins:
+  - `http://localhost:3000`
+  - `http://localhost:5173`
+- CORS preflight (`OPTIONS`) is handled for both `/api/*` and `/api/v1/*`.
+
 ## API Docs + Observability
 - API base paths:
   - Preferred (versioned): `/api/v1`
