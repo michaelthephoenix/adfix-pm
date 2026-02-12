@@ -8,9 +8,13 @@
   ],
   "scripts": {
     "dev:api": "npm --workspace @adfix/api run dev",
+    "dev:web": "npm --workspace @adfix/web run dev",
     "build:api": "npm --workspace @adfix/api run build",
+    "build:web": "npm --workspace @adfix/web run build",
     "start:api": "npm --workspace @adfix/api run start",
+    "preview:web": "npm --workspace @adfix/web run preview",
     "typecheck": "npm --workspace @adfix/api run typecheck",
+    "typecheck:web": "npm --workspace @adfix/web run typecheck",
     "db:migrate": "npm --workspace @adfix/api run db:migrate",
     "db:seed": "npm --workspace @adfix/api run db:seed",
     "db:seed:demo": "npm --workspace @adfix/api run db:seed:demo",

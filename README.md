@@ -4,7 +4,7 @@ Monorepo scaffold for the Adfix Project Management System.
 
 ## Structure
 - `apps/api`: Node + Express API (TypeScript)
-- `apps/web`: Frontend placeholder
+- `apps/web`: React + Vite frontend (TypeScript)
 - `packages/config`: shared config placeholder
 
 ## Quick Start
@@ -20,6 +20,9 @@ Monorepo scaffold for the Adfix Project Management System.
 - Password: value from `SEED_ADMIN_PASSWORD` (default `ChangeMe123!`)
 
 ## Useful Commands
+- `npm run dev:web`: start frontend dev server
+- `npm run build:web`: build frontend
+- `npm run typecheck:web`: run frontend TypeScript checks
 - `npm run db:migrate`: apply pending SQL migrations from `apps/api/db/migrations`
 - `npm run db:seed`: upsert the default admin user
 - `npm run db:seed:demo`: seed admin + demo client/project/tasks
