@@ -93,6 +93,15 @@ Monorepo scaffold for the Adfix Project Management System.
   - `viewer`: list comments only
   - `member`/`manager`/`owner`: create and delete comments
 
+## Notifications
+- In-app notification endpoints:
+  - `GET /api/notifications`
+  - `PATCH /api/notifications/:id/read`
+  - `POST /api/notifications/read-all`
+- Notification triggers implemented:
+  - project team assignment (`project_team_assigned`)
+  - task assignment (`task_assigned`)
+
 ## Seed Profiles
 - `SEED_PROFILE=admin_only` (default): only admin user
 - `SEED_PROFILE=demo`: admin user + demo client/project/task data

@@ -39,7 +39,8 @@ export function buildOpenApiSpec(baseUrl: string) {
       { name: "analytics" },
       { name: "search" },
       { name: "users" },
-      { name: "admin" }
+      { name: "admin" },
+      { name: "notifications" }
     ],
     components: {
       securitySchemes: {
@@ -411,6 +412,27 @@ export function buildOpenApiSpec(baseUrl: string) {
           tags: ["search"],
           summary: "Global/scoped search (RBAC scoped)",
           responses: { "200": { description: "Search results" }, ...errorResponses }
+        }
+      }),
+      "/notifications": withAuth({
+        get: {
+          tags: ["notifications"],
+          summary: "List current user notifications",
+          responses: { "200": { description: "Notifications list" }, ...errorResponses }
+        }
+      }),
+      "/notifications/read-all": withAuth({
+        post: {
+          tags: ["notifications"],
+          summary: "Mark all current user notifications as read",
+          responses: { "200": { description: "Bulk read update result" }, ...errorResponses }
+        }
+      }),
+      "/notifications/{id}/read": withAuth({
+        patch: {
+          tags: ["notifications"],
+          summary: "Mark notification as read",
+          responses: { "200": { description: "Notification marked as read" }, ...errorResponses }
         }
       }),
 

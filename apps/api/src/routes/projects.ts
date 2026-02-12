@@ -16,6 +16,7 @@ import {
   updateProject
 } from "../services/projects.service.js";
 import { hasProjectPermission } from "../services/rbac.service.js";
+import { createNotification } from "../services/notifications.service.js";
 import { logAndSendForbidden } from "../utils/authz.js";
 import { sendConflict, sendNotFound, sendUnauthorized } from "../utils/http-error.js";
 import { sendValidationError } from "../utils/validation.js";
@@ -259,6 +260,21 @@ projectsRouter.post("/:id/team", async (req: AuthenticatedRequest, res) => {
       role: parsedBody.data.role
     }
   });
+
+  if (parsedBody.data.userId !== req.user.id) {
+    await createNotification({
+      userId: parsedBody.data.userId,
+      projectId: parsedParams.data.id,
+      type: "project_team_assigned",
+      title: "Added to project",
+      message: `You were added to project "${project.name}" as ${parsedBody.data.role}.`,
+      metadata: {
+        projectId: parsedParams.data.id,
+        role: parsedBody.data.role,
+        addedByUserId: req.user.id
+      }
+    });
+  }
 
   return res.status(201).json({ data: result.member });
 });

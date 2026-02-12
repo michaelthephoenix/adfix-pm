@@ -19,7 +19,7 @@ const adminUser = {
 
 async function resetDatabase() {
   await pool.query(
-    `TRUNCATE TABLE activity_log, project_team, task_comments, files, tasks, projects, auth_sessions, clients, users RESTART IDENTITY CASCADE`
+    `TRUNCATE TABLE notifications, activity_log, project_team, task_comments, files, tasks, projects, auth_sessions, clients, users RESTART IDENTITY CASCADE`
   );
 
   const passwordHash = await bcrypt.hash(adminUser.password, 12);
@@ -80,6 +80,7 @@ describe("API integration", () => {
     expect(docsResponse.body.paths).toHaveProperty("/users/audit-logs");
     expect(docsResponse.body.paths).toHaveProperty("/tasks/bulk/status");
     expect(docsResponse.body.paths).toHaveProperty("/tasks/{id}/comments");
+    expect(docsResponse.body.paths).toHaveProperty("/notifications");
     expect(docsResponse.body.components.schemas).toHaveProperty("ErrorResponse");
   });
 
@@ -1275,6 +1276,102 @@ describe("API integration", () => {
       [projectId]
     );
     expect(Number(authzDeniedLogs.rows[0].count)).toBeGreaterThanOrEqual(4);
+  });
+
+  it("notifications: assignment events create inbox items and support read actions", async () => {
+    const ownerAuth = await login();
+
+    const assigneeEmail = "notify-member@adfix.local";
+    const assigneePassword = "NotifyPass123!";
+    const assigneePasswordHash = await bcrypt.hash(assigneePassword, 12);
+    const assigneeInsert = await pool.query<{ id: string }>(
+      `INSERT INTO users (email, name, password_hash, is_active, created_at, updated_at)
+       VALUES ($1, 'Notify Member', $2, TRUE, NOW(), NOW())
+       RETURNING id`,
+      [assigneeEmail, assigneePasswordHash]
+    );
+    const assigneeId = assigneeInsert.rows[0].id;
+
+    const clientResponse = await request(app)
+      .post("/api/clients")
+      .set("Authorization", `Bearer ${ownerAuth.accessToken}`)
+      .send({ name: "Notifications Client" });
+    expect(clientResponse.status).toBe(201);
+    const clientId = clientResponse.body.data.id as string;
+
+    const projectResponse = await request(app)
+      .post("/api/projects")
+      .set("Authorization", `Bearer ${ownerAuth.accessToken}`)
+      .send({
+        clientId,
+        name: "Notifications Project",
+        startDate: "2026-02-12",
+        deadline: "2026-05-01"
+      });
+    expect(projectResponse.status).toBe(201);
+    const projectId = projectResponse.body.data.id as string;
+
+    const addMemberResponse = await request(app)
+      .post(`/api/projects/${projectId}/team`)
+      .set("Authorization", `Bearer ${ownerAuth.accessToken}`)
+      .send({ userId: assigneeId, role: "member" });
+    expect(addMemberResponse.status).toBe(201);
+
+    const taskResponse = await request(app)
+      .post("/api/tasks")
+      .set("Authorization", `Bearer ${ownerAuth.accessToken}`)
+      .send({
+        projectId,
+        title: "Assigned task notification",
+        phase: "production",
+        assignedTo: assigneeId
+      });
+    expect(taskResponse.status).toBe(201);
+
+    const assigneeAuth = await loginAs(assigneeEmail, assigneePassword);
+
+    const listResponse = await request(app)
+      .get("/api/notifications")
+      .set("Authorization", `Bearer ${assigneeAuth.accessToken}`);
+
+    expect(listResponse.status).toBe(200);
+    expect(listResponse.body.data.length).toBe(2);
+    expect(listResponse.body.meta.unreadCount).toBe(2);
+    expect(listResponse.body.data[0].type).toBe("task_assigned");
+    expect(listResponse.body.data[1].type).toBe("project_team_assigned");
+
+    const markReadResponse = await request(app)
+      .patch(`/api/notifications/${listResponse.body.data[0].id}/read`)
+      .set("Authorization", `Bearer ${assigneeAuth.accessToken}`);
+
+    expect(markReadResponse.status).toBe(200);
+    expect(markReadResponse.body.data.is_read).toBe(true);
+    expect(markReadResponse.body.data.read_at).toBeTypeOf("string");
+
+    const unreadOnlyResponse = await request(app)
+      .get("/api/notifications")
+      .query({ unreadOnly: true })
+      .set("Authorization", `Bearer ${assigneeAuth.accessToken}`);
+
+    expect(unreadOnlyResponse.status).toBe(200);
+    expect(unreadOnlyResponse.body.data.length).toBe(1);
+    expect(unreadOnlyResponse.body.meta.unreadCount).toBe(1);
+
+    const readAllResponse = await request(app)
+      .post("/api/notifications/read-all")
+      .set("Authorization", `Bearer ${assigneeAuth.accessToken}`);
+
+    expect(readAllResponse.status).toBe(200);
+    expect(readAllResponse.body.data.updatedCount).toBe(1);
+
+    const unreadAfterReadAll = await request(app)
+      .get("/api/notifications")
+      .query({ unreadOnly: true })
+      .set("Authorization", `Bearer ${assigneeAuth.accessToken}`);
+
+    expect(unreadAfterReadAll.status).toBe(200);
+    expect(unreadAfterReadAll.body.data.length).toBe(0);
+    expect(unreadAfterReadAll.body.meta.unreadCount).toBe(0);
   });
 
   it("search: global and scoped search across projects/tasks/files/clients", async () => {

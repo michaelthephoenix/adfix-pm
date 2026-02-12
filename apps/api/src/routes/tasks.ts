@@ -20,6 +20,7 @@ import {
   listTaskComments
 } from "../services/task-comments.service.js";
 import { hasProjectPermission } from "../services/rbac.service.js";
+import { createNotification } from "../services/notifications.service.js";
 import { logAndSendForbidden } from "../utils/authz.js";
 import { sendConflict, sendNotFound, sendUnauthorized } from "../utils/http-error.js";
 import { sendValidationError } from "../utils/validation.js";
@@ -504,6 +505,22 @@ tasksRouter.post("/", async (req: AuthenticatedRequest, res) => {
     details: { taskId: task.id, status: task.status }
   });
 
+  if (task.assigned_to && task.assigned_to !== req.user.id) {
+    await createNotification({
+      userId: task.assigned_to,
+      projectId: task.project_id,
+      taskId: task.id,
+      type: "task_assigned",
+      title: "Task assigned",
+      message: `You were assigned to task "${task.title}" in project "${project.name}".`,
+      metadata: {
+        taskId: task.id,
+        projectId: task.project_id,
+        assignedByUserId: req.user.id
+      }
+    });
+  }
+
   return res.status(201).json({ data: task });
 });
 
@@ -552,6 +569,26 @@ tasksRouter.put("/:id", async (req: AuthenticatedRequest, res) => {
     projectId: task.project_id,
     details: { taskId: task.id, updatedFields: Object.keys(parsed.data) }
   });
+
+  const assignmentChanged =
+    typeof parsed.data.assignedTo !== "undefined" && parsed.data.assignedTo !== existingTask.assigned_to;
+
+  if (assignmentChanged && task.assigned_to && task.assigned_to !== req.user.id) {
+    await createNotification({
+      userId: task.assigned_to,
+      projectId: task.project_id,
+      taskId: task.id,
+      type: "task_assigned",
+      title: "Task assigned",
+      message: `You were assigned to task "${task.title}".`,
+      metadata: {
+        taskId: task.id,
+        projectId: task.project_id,
+        assignedByUserId: req.user.id,
+        reassigned: true
+      }
+    });
+  }
 
   return res.status(200).json({ data: task });
 });

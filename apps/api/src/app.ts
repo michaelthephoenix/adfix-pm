@@ -11,6 +11,7 @@ import { filesRouter } from "./routes/files.js";
 import { analyticsRouter } from "./routes/analytics.js";
 import { usersRouter } from "./routes/users.js";
 import { searchRouter } from "./routes/search.js";
+import { notificationsRouter } from "./routes/notifications.js";
 import { apiRateLimiter, authRateLimiter } from "./middleware/rate-limit.js";
 import { errorHandler, notFoundHandler } from "./middleware/errors.js";
 import { requestIdMiddleware } from "./middleware/request-id.js";
@@ -45,6 +46,7 @@ export function createApp() {
     app.use(`${basePath}/analytics`, apiRateLimiter, analyticsRouter);
     app.use(`${basePath}/users`, apiRateLimiter, usersRouter);
     app.use(`${basePath}/search`, apiRateLimiter, searchRouter);
+    app.use(`${basePath}/notifications`, apiRateLimiter, notificationsRouter);
   }
 
   mountApi("/api");
