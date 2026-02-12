@@ -4,10 +4,13 @@ import { requireAuth } from "../middleware/auth.js";
 import type { AuthenticatedRequest } from "../types/http.js";
 import { insertActivityLog, listProjectActivity } from "../services/activity-log.service.js";
 import {
+  addProjectTeamMember,
   createProject,
   deleteProject,
   getProjectDetailById,
+  listProjectTeamMembers,
   listProjects,
+  removeProjectTeamMember,
   transitionProjectPhase,
   updateProject
 } from "../services/projects.service.js";
@@ -57,6 +60,16 @@ const idParamsSchema = z.object({
   id: z.string().uuid()
 });
 
+const projectTeamParamsSchema = z.object({
+  id: z.string().uuid(),
+  userId: z.string().uuid()
+});
+
+const projectTeamAddSchema = z.object({
+  userId: z.string().uuid(),
+  role: z.string().trim().min(1).max(100)
+});
+
 projectsRouter.use(requireAuth);
 
 projectsRouter.get("/", async (req, res) => {
@@ -96,6 +109,90 @@ projectsRouter.get("/:id/activity", async (req, res) => {
 
   const activity = await listProjectActivity(parsedParams.data.id);
   return res.status(200).json({ data: activity });
+});
+
+projectsRouter.get("/:id/team", async (req, res) => {
+  const parsedParams = idParamsSchema.safeParse(req.params);
+  if (!parsedParams.success) {
+    return res.status(400).json({ error: "Invalid project id" });
+  }
+
+  const project = await getProjectDetailById(parsedParams.data.id);
+  if (!project) {
+    return res.status(404).json({ error: "Project not found" });
+  }
+
+  const members = await listProjectTeamMembers(parsedParams.data.id);
+  return res.status(200).json({ data: members });
+});
+
+projectsRouter.post("/:id/team", async (req: AuthenticatedRequest, res) => {
+  const parsedParams = idParamsSchema.safeParse(req.params);
+  if (!parsedParams.success) {
+    return res.status(400).json({ error: "Invalid project id" });
+  }
+
+  const parsedBody = projectTeamAddSchema.safeParse(req.body);
+  if (!parsedBody.success) {
+    return res.status(400).json({ error: "Invalid team payload" });
+  }
+
+  if (!req.user) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  const result = await addProjectTeamMember({
+    projectId: parsedParams.data.id,
+    userId: parsedBody.data.userId,
+    role: parsedBody.data.role
+  });
+
+  if (!result.ok) {
+    if (result.reason === "project_not_found") {
+      return res.status(404).json({ error: "Project not found" });
+    }
+
+    return res.status(404).json({ error: "User not found" });
+  }
+
+  await insertActivityLog({
+    userId: req.user.id,
+    action: "project_team_member_added",
+    projectId: parsedParams.data.id,
+    details: {
+      userId: parsedBody.data.userId,
+      role: parsedBody.data.role
+    }
+  });
+
+  return res.status(201).json({ data: result.member });
+});
+
+projectsRouter.delete("/:id/team/:userId", async (req: AuthenticatedRequest, res) => {
+  const parsedParams = projectTeamParamsSchema.safeParse(req.params);
+  if (!parsedParams.success) {
+    return res.status(400).json({ error: "Invalid project or user id" });
+  }
+
+  if (!req.user) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  const deleted = await removeProjectTeamMember(parsedParams.data.id, parsedParams.data.userId);
+  if (!deleted) {
+    return res.status(404).json({ error: "Project team member not found" });
+  }
+
+  await insertActivityLog({
+    userId: req.user.id,
+    action: "project_team_member_removed",
+    projectId: parsedParams.data.id,
+    details: {
+      userId: parsedParams.data.userId
+    }
+  });
+
+  return res.status(204).send();
 });
 
 projectsRouter.post("/", async (req: AuthenticatedRequest, res) => {

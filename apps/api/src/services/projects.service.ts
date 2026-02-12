@@ -47,6 +47,15 @@ type ProjectDetail = ProjectRow & {
   };
 };
 
+type ProjectTeamRow = {
+  project_id: string;
+  user_id: string;
+  role: string;
+  created_at: Date;
+  user_name: string;
+  user_email: string;
+};
+
 export async function listProjects(filter: ListProjectsFilter) {
   const where: string[] = ["p.deleted_at IS NULL"];
   const values: Array<string> = [];
@@ -397,4 +406,66 @@ export async function transitionProjectPhase(input: {
   } finally {
     client.release();
   }
+}
+
+export async function listProjectTeamMembers(projectId: string) {
+  const result = await pool.query<ProjectTeamRow>(
+    `SELECT
+       pt.project_id,
+       pt.user_id,
+       pt.role,
+       pt.created_at,
+       u.name AS user_name,
+       u.email AS user_email
+     FROM project_team pt
+     INNER JOIN users u ON u.id = pt.user_id AND u.deleted_at IS NULL
+     WHERE pt.project_id = $1
+     ORDER BY pt.created_at ASC`,
+    [projectId]
+  );
+
+  return result.rows;
+}
+
+export async function addProjectTeamMember(input: {
+  projectId: string;
+  userId: string;
+  role: string;
+}) {
+  const projectExists = await pool.query<{ id: string }>(
+    `SELECT id FROM projects WHERE id = $1 AND deleted_at IS NULL LIMIT 1`,
+    [input.projectId]
+  );
+  if (projectExists.rowCount === 0) return { ok: false as const, reason: "project_not_found" as const };
+
+  const userExists = await pool.query<{ id: string }>(
+    `SELECT id FROM users WHERE id = $1 AND deleted_at IS NULL AND is_active = TRUE LIMIT 1`,
+    [input.userId]
+  );
+  if (userExists.rowCount === 0) return { ok: false as const, reason: "user_not_found" as const };
+
+  const result = await pool.query<ProjectTeamRow>(
+    `INSERT INTO project_team (project_id, user_id, role, created_at)
+     VALUES ($1, $2, $3, NOW())
+     ON CONFLICT (project_id, user_id)
+     DO UPDATE SET role = EXCLUDED.role
+     RETURNING project_id, user_id, role, created_at,
+       (SELECT name FROM users WHERE id = project_team.user_id) AS user_name,
+       (SELECT email FROM users WHERE id = project_team.user_id) AS user_email`,
+    [input.projectId, input.userId, input.role]
+  );
+
+  return { ok: true as const, member: result.rows[0] };
+}
+
+export async function removeProjectTeamMember(projectId: string, userId: string) {
+  const result = await pool.query<{ project_id: string; user_id: string }>(
+    `DELETE FROM project_team
+     WHERE project_id = $1
+       AND user_id = $2
+     RETURNING project_id, user_id`,
+    [projectId, userId]
+  );
+
+  return result.rowCount === 1;
 }

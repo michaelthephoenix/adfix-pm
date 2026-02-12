@@ -638,4 +638,92 @@ describe("API integration", () => {
 
     expect(updateOtherResponse.status).toBe(403);
   });
+
+  it("project team: add/list/remove members with activity logs", async () => {
+    const auth = await login();
+
+    const meResponse = await request(app)
+      .get("/api/auth/me")
+      .set("Authorization", `Bearer ${auth.accessToken}`);
+
+    expect(meResponse.status).toBe(200);
+
+    const secondUserPasswordHash = await bcrypt.hash("TeamUserPass123!", 12);
+    const secondUserInsert = await pool.query<{ id: string }>(
+      `INSERT INTO users (email, name, password_hash, is_active, created_at, updated_at)
+       VALUES ('teammate@adfix.local', 'Teammate User', $1, TRUE, NOW(), NOW())
+       RETURNING id`,
+      [secondUserPasswordHash]
+    );
+    const secondUserId = secondUserInsert.rows[0].id;
+
+    const clientResponse = await request(app)
+      .post("/api/clients")
+      .set("Authorization", `Bearer ${auth.accessToken}`)
+      .send({ name: "Team Client" });
+
+    expect(clientResponse.status).toBe(201);
+    const clientId = clientResponse.body.data.id as string;
+
+    const projectResponse = await request(app)
+      .post("/api/projects")
+      .set("Authorization", `Bearer ${auth.accessToken}`)
+      .send({
+        clientId,
+        name: "Team Project",
+        startDate: "2026-02-12",
+        deadline: "2026-04-01"
+      });
+
+    expect(projectResponse.status).toBe(201);
+    const projectId = projectResponse.body.data.id as string;
+
+    const addMemberResponse = await request(app)
+      .post(`/api/projects/${projectId}/team`)
+      .set("Authorization", `Bearer ${auth.accessToken}`)
+      .send({
+        userId: secondUserId,
+        role: "Designer"
+      });
+
+    expect(addMemberResponse.status).toBe(201);
+    expect(addMemberResponse.body.data.user_id).toBe(secondUserId);
+    expect(addMemberResponse.body.data.role).toBe("Designer");
+
+    const listMembersResponse = await request(app)
+      .get(`/api/projects/${projectId}/team`)
+      .set("Authorization", `Bearer ${auth.accessToken}`);
+
+    expect(listMembersResponse.status).toBe(200);
+    expect(Array.isArray(listMembersResponse.body.data)).toBe(true);
+    expect(listMembersResponse.body.data.length).toBe(1);
+    expect(listMembersResponse.body.data[0].user_id).toBe(secondUserId);
+
+    const removeMemberResponse = await request(app)
+      .delete(`/api/projects/${projectId}/team/${secondUserId}`)
+      .set("Authorization", `Bearer ${auth.accessToken}`);
+
+    expect(removeMemberResponse.status).toBe(204);
+
+    const listAfterRemoveResponse = await request(app)
+      .get(`/api/projects/${projectId}/team`)
+      .set("Authorization", `Bearer ${auth.accessToken}`);
+
+    expect(listAfterRemoveResponse.status).toBe(200);
+    expect(listAfterRemoveResponse.body.data.length).toBe(0);
+
+    const teamActivityRows = await pool.query<{ action: string }>(
+      `SELECT action
+       FROM activity_log
+       WHERE project_id = $1
+         AND action IN ('project_team_member_added', 'project_team_member_removed')
+       ORDER BY created_at ASC`,
+      [projectId]
+    );
+
+    expect(teamActivityRows.rows.map((row) => row.action)).toEqual([
+      "project_team_member_added",
+      "project_team_member_removed"
+    ]);
+  });
 });
