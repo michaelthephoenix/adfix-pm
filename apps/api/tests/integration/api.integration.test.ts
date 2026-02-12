@@ -894,4 +894,107 @@ describe("API integration", () => {
     expect(projectsOnlySearch.body.data.files.length).toBe(0);
     expect(projectsOnlySearch.body.data.clients.length).toBe(0);
   });
+
+  it("tasks: bulk status update and bulk delete", async () => {
+    const auth = await login();
+
+    const clientResponse = await request(app)
+      .post("/api/clients")
+      .set("Authorization", `Bearer ${auth.accessToken}`)
+      .send({ name: "Bulk Client" });
+    expect(clientResponse.status).toBe(201);
+    const clientId = clientResponse.body.data.id as string;
+
+    const projectResponse = await request(app)
+      .post("/api/projects")
+      .set("Authorization", `Bearer ${auth.accessToken}`)
+      .send({
+        clientId,
+        name: "Bulk Project",
+        startDate: "2026-02-12",
+        deadline: "2026-04-01"
+      });
+    expect(projectResponse.status).toBe(201);
+    const projectId = projectResponse.body.data.id as string;
+
+    const t1 = await request(app)
+      .post("/api/tasks")
+      .set("Authorization", `Bearer ${auth.accessToken}`)
+      .send({ projectId, title: "Bulk Task 1", phase: "production" });
+    const t2 = await request(app)
+      .post("/api/tasks")
+      .set("Authorization", `Bearer ${auth.accessToken}`)
+      .send({ projectId, title: "Bulk Task 2", phase: "production" });
+    const t3 = await request(app)
+      .post("/api/tasks")
+      .set("Authorization", `Bearer ${auth.accessToken}`)
+      .send({ projectId, title: "Bulk Task 3", phase: "production" });
+
+    expect(t1.status).toBe(201);
+    expect(t2.status).toBe(201);
+    expect(t3.status).toBe(201);
+
+    const taskIds = [t1.body.data.id, t2.body.data.id, t3.body.data.id] as string[];
+
+    const bulkToInProgress = await request(app)
+      .post("/api/tasks/bulk/status")
+      .set("Authorization", `Bearer ${auth.accessToken}`)
+      .send({
+        taskIds,
+        status: "in_progress",
+        reason: "bulk start"
+      });
+
+    expect(bulkToInProgress.status).toBe(200);
+    expect(bulkToInProgress.body.data.updatedCount).toBe(3);
+    expect(bulkToInProgress.body.data.failedCount).toBe(0);
+
+    const bulkToPending = await request(app)
+      .post("/api/tasks/bulk/status")
+      .set("Authorization", `Bearer ${auth.accessToken}`)
+      .send({
+        taskIds,
+        status: "pending"
+      });
+
+    expect(bulkToPending.status).toBe(200);
+    expect(bulkToPending.body.data.updatedCount).toBe(0);
+    expect(bulkToPending.body.data.failedCount).toBe(3);
+
+    const bulkDelete = await request(app)
+      .post("/api/tasks/bulk/delete")
+      .set("Authorization", `Bearer ${auth.accessToken}`)
+      .send({ taskIds });
+
+    expect(bulkDelete.status).toBe(200);
+    expect(bulkDelete.body.data.deletedCount).toBe(3);
+
+    const listRemaining = await request(app)
+      .get(`/api/tasks?projectId=${projectId}`)
+      .set("Authorization", `Bearer ${auth.accessToken}`);
+
+    expect(listRemaining.status).toBe(200);
+    expect(listRemaining.body.data.length).toBe(0);
+
+    const bulkStatusLogs = await pool.query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count
+       FROM activity_log
+       WHERE action = 'task_status_changed'
+         AND details->>'bulk' = 'true'
+         AND project_id = $1`,
+      [projectId]
+    );
+
+    const bulkDeleteLogs = await pool.query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count
+       FROM activity_log
+       WHERE action = 'task_deleted'
+         AND details->>'bulk' = 'true'
+         AND project_id = $1`,
+      [projectId]
+    );
+
+    expect(Number(bulkStatusLogs.rows[0].count)).toBe(3);
+    expect(Number(bulkDeleteLogs.rows[0].count)).toBe(3);
+  });
 });

@@ -4,6 +4,8 @@ import { requireAuth } from "../middleware/auth.js";
 import type { AuthenticatedRequest } from "../types/http.js";
 import { insertActivityLog } from "../services/activity-log.service.js";
 import {
+  bulkDeleteTasks,
+  bulkTransitionTaskStatus,
   createTask,
   deleteTask,
   getTaskById,
@@ -56,6 +58,18 @@ const taskStatusPatchSchema = z.object({
   reason: z.string().trim().max(1000).optional().nullable()
 });
 
+const bulkTaskIdsSchema = z.array(z.string().uuid()).min(1).max(200);
+
+const bulkStatusPatchSchema = z.object({
+  taskIds: bulkTaskIdsSchema,
+  status: taskStatusEnum,
+  reason: z.string().trim().max(1000).optional().nullable()
+});
+
+const bulkDeleteSchema = z.object({
+  taskIds: bulkTaskIdsSchema
+});
+
 const idParamsSchema = z.object({
   id: z.string().uuid()
 });
@@ -75,6 +89,94 @@ tasksRouter.get("/", async (req, res) => {
       page: parsed.data.page,
       pageSize: parsed.data.pageSize,
       total: result.total
+    }
+  });
+});
+
+tasksRouter.post("/bulk/status", async (req: AuthenticatedRequest, res) => {
+  const parsed = bulkStatusPatchSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid bulk status payload" });
+  }
+
+  if (!req.user) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  const originalTasks = await Promise.all(parsed.data.taskIds.map((taskId) => getTaskById(taskId)));
+  const originalById = new Map(
+    originalTasks.filter((t): t is NonNullable<typeof t> => Boolean(t)).map((task) => [task.id, task])
+  );
+
+  const results = await bulkTransitionTaskStatus({
+    taskIds: parsed.data.taskIds,
+    nextStatus: parsed.data.status
+  });
+
+  for (const result of results) {
+    if (!result.ok || !result.task) continue;
+
+    const original = originalById.get(result.task.id);
+    await insertActivityLog({
+      userId: req.user.id,
+      action: "task_status_changed",
+      projectId: result.task.project_id,
+      details: {
+        taskId: result.task.id,
+        from: original?.status ?? null,
+        to: result.task.status,
+        reason: parsed.data.reason ?? null,
+        bulk: true
+      }
+    });
+  }
+
+  return res.status(200).json({
+    data: {
+      updatedCount: results.filter((r) => r.ok).length,
+      failedCount: results.filter((r) => !r.ok).length,
+      results: results.map((result) => ({
+        taskId: result.taskId,
+        ok: result.ok,
+        reason: result.reason ?? null
+      }))
+    }
+  });
+});
+
+tasksRouter.post("/bulk/delete", async (req: AuthenticatedRequest, res) => {
+  const parsed = bulkDeleteSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid bulk delete payload" });
+  }
+
+  if (!req.user) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  const existingTasks = await Promise.all(parsed.data.taskIds.map((taskId) => getTaskById(taskId)));
+  const existingById = new Map(
+    existingTasks.filter((t): t is NonNullable<typeof t> => Boolean(t)).map((task) => [task.id, task])
+  );
+
+  const result = await bulkDeleteTasks(parsed.data.taskIds);
+
+  for (const taskId of result.deletedIds) {
+    const existingTask = existingById.get(taskId);
+    if (!existingTask) continue;
+
+    await insertActivityLog({
+      userId: req.user.id,
+      action: "task_deleted",
+      projectId: existingTask.project_id,
+      details: { taskId: existingTask.id, bulk: true }
+    });
+  }
+
+  return res.status(200).json({
+    data: {
+      deletedCount: result.deletedCount,
+      deletedIds: result.deletedIds
     }
   });
 });

@@ -310,3 +310,59 @@ export async function transitionTaskStatus(input: {
     client.release();
   }
 }
+
+export async function bulkTransitionTaskStatus(input: {
+  taskIds: string[];
+  nextStatus: TaskStatus;
+}) {
+  const results: Array<{
+    taskId: string;
+    ok: boolean;
+    reason?: "not_found" | "invalid_transition";
+    task?: TaskRow;
+  }> = [];
+
+  for (const taskId of input.taskIds) {
+    const result = await transitionTaskStatus({
+      taskId,
+      nextStatus: input.nextStatus
+    });
+
+    if (!result.ok) {
+      results.push({
+        taskId,
+        ok: false,
+        reason: result.reason
+      });
+      continue;
+    }
+
+    results.push({
+      taskId,
+      ok: true,
+      task: result.task
+    });
+  }
+
+  return results;
+}
+
+export async function bulkDeleteTasks(taskIds: string[]) {
+  if (taskIds.length === 0) {
+    return { deletedCount: 0, deletedIds: [] as string[] };
+  }
+
+  const result = await pool.query<{ id: string }>(
+    `UPDATE tasks
+     SET deleted_at = NOW(), updated_at = NOW()
+     WHERE id = ANY($1::uuid[])
+       AND deleted_at IS NULL
+     RETURNING id`,
+    [taskIds]
+  );
+
+  return {
+    deletedCount: result.rowCount,
+    deletedIds: result.rows.map((row) => row.id)
+  };
+}
