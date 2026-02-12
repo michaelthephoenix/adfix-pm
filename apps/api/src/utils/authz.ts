@@ -1,6 +1,7 @@
 import type { Response } from "express";
 import type { AuthenticatedRequest } from "../types/http.js";
 import { insertActivityLog } from "../services/activity-log.service.js";
+import { sendForbidden } from "./http-error.js";
 
 export async function logAndSendForbidden(input: {
   req: AuthenticatedRequest;
@@ -21,5 +22,5 @@ export async function logAndSendForbidden(input: {
     });
   }
 
-  return input.res.status(403).json({ error: "Forbidden" });
+  return sendForbidden(input.res, "Forbidden");
 }

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireAuth } from "../middleware/auth.js";
 import type { AuthenticatedRequest } from "../types/http.js";
 import { runSearch } from "../services/search.service.js";
+import { sendUnauthorized } from "../utils/http-error.js";
 import { sendValidationError } from "../utils/validation.js";
 
 export const searchRouter = Router();
@@ -17,7 +18,7 @@ searchRouter.use(requireAuth);
 
 searchRouter.get("/", async (req: AuthenticatedRequest, res) => {
   if (!req.user) {
-    return res.status(401).json({ error: "Unauthorized" });
+    return sendUnauthorized(res, "Unauthorized");
   }
 
   const parsed = searchQuerySchema.safeParse(req.query);

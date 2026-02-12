@@ -40,8 +40,16 @@ Monorepo scaffold for the Adfix Project Management System.
 
 ## Validation Error Shape
 - Request validation failures return:
+  - `code`: `VALIDATION_ERROR`
   - `error`: concise message
+  - `requestId`: response correlation id
   - `details`: Zod `flatten()` output (`formErrors`, `fieldErrors`)
+
+## Error Contract
+- API errors now use a consistent shape:
+  - `code`: stable machine-readable identifier (e.g. `UNAUTHORIZED`, `FORBIDDEN`, `NOT_FOUND`, `CONFLICT`)
+  - `error`: human-readable message
+  - `requestId`: correlation id from `x-request-id`
 
 ## Seed Profiles
 - `SEED_PROFILE=admin_only` (default): only admin user

@@ -830,6 +830,7 @@ describe("API integration", () => {
       .send({ avatarUrl: "not-a-url" });
 
     expect(invalidPayloadResponse.status).toBe(400);
+    expect(invalidPayloadResponse.body.code).toBe("VALIDATION_ERROR");
     expect(invalidPayloadResponse.body.error).toBe("Invalid user payload");
     expect(invalidPayloadResponse.body.details).toHaveProperty("fieldErrors");
   });
@@ -889,6 +890,7 @@ describe("API integration", () => {
       .set("Authorization", `Bearer ${outsiderAuth.accessToken}`)
       .send({ isActive: false });
     expect(outsiderStatusPatch.status).toBe(403);
+    expect(outsiderStatusPatch.body.code).toBe("FORBIDDEN");
 
     const statusPatch = await request(app)
       .patch(`/api/users/${memberId}/status`)

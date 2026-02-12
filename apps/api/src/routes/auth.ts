@@ -10,6 +10,7 @@ import {
 import { requireAuth } from "../middleware/auth.js";
 import type { AuthenticatedRequest } from "../types/http.js";
 import { verifyRefreshToken } from "../utils/tokens.js";
+import { sendUnauthorized } from "../utils/http-error.js";
 import { sendValidationError } from "../utils/validation.js";
 
 export const authRouter = Router();
@@ -37,7 +38,7 @@ authRouter.post("/login", async (req, res) => {
   });
 
   if (!result) {
-    return res.status(401).json({ error: "Invalid email or password" });
+    return sendUnauthorized(res, "Invalid email or password");
   }
 
   await insertActivityLog({
@@ -67,7 +68,7 @@ authRouter.post("/refresh", async (req, res) => {
   });
 
   if (!result) {
-    return res.status(401).json({ error: "Invalid refresh token" });
+    return sendUnauthorized(res, "Invalid refresh token");
   }
 
   await insertActivityLog({
@@ -92,7 +93,7 @@ authRouter.post("/logout", async (req, res) => {
   try {
     const decoded = verifyRefreshToken(parsed.data.refreshToken);
     if (decoded.tokenType !== "refresh") {
-      return res.status(401).json({ error: "Invalid refresh token" });
+      return sendUnauthorized(res, "Invalid refresh token");
     }
 
     await revokeSessionByRefreshToken(parsed.data.refreshToken);
@@ -108,7 +109,7 @@ authRouter.post("/logout", async (req, res) => {
       projectId: null
     });
   } catch {
-    return res.status(401).json({ error: "Invalid refresh token" });
+    return sendUnauthorized(res, "Invalid refresh token");
   }
 
   return res.status(204).send();
@@ -123,7 +124,7 @@ authRouter.post("/logout-all", async (req, res) => {
   try {
     const decoded = verifyRefreshToken(parsed.data.refreshToken);
     if (decoded.tokenType !== "refresh") {
-      return res.status(401).json({ error: "Invalid refresh token" });
+      return sendUnauthorized(res, "Invalid refresh token");
     }
 
     await revokeAllUserSessionsByRefreshToken(parsed.data.refreshToken);
@@ -138,7 +139,7 @@ authRouter.post("/logout-all", async (req, res) => {
       projectId: null
     });
   } catch {
-    return res.status(401).json({ error: "Invalid refresh token" });
+    return sendUnauthorized(res, "Invalid refresh token");
   }
 
   return res.status(204).send();

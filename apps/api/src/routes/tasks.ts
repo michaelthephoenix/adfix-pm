@@ -16,6 +16,7 @@ import {
 import { getProjectById } from "../services/projects.service.js";
 import { hasProjectPermission } from "../services/rbac.service.js";
 import { logAndSendForbidden } from "../utils/authz.js";
+import { sendConflict, sendNotFound, sendUnauthorized } from "../utils/http-error.js";
 import { sendValidationError } from "../utils/validation.js";
 
 export const tasksRouter = Router();
@@ -82,7 +83,7 @@ tasksRouter.use(requireAuth);
 
 tasksRouter.get("/", async (req: AuthenticatedRequest, res) => {
   if (!req.user) {
-    return res.status(401).json({ error: "Unauthorized" });
+    return sendUnauthorized(res, "Unauthorized");
   }
 
   const parsed = listTasksQuerySchema.safeParse(req.query);
@@ -93,7 +94,7 @@ tasksRouter.get("/", async (req: AuthenticatedRequest, res) => {
   if (parsed.data.projectId) {
     const project = await getProjectById(parsed.data.projectId);
     if (!project) {
-      return res.status(404).json({ error: "Project not found" });
+      return sendNotFound(res, "Project not found");
     }
 
     const canViewProject = await hasProjectPermission({
@@ -129,13 +130,13 @@ tasksRouter.post("/bulk/status", async (req: AuthenticatedRequest, res) => {
   }
 
   if (!req.user) {
-    return res.status(401).json({ error: "Unauthorized" });
+    return sendUnauthorized(res, "Unauthorized");
   }
 
   const loadedTasks = await Promise.all(parsed.data.taskIds.map((taskId) => getTaskById(taskId)));
   for (const task of loadedTasks) {
     if (!task) {
-      return res.status(404).json({ error: "Task not found in bulk request" });
+      return sendNotFound(res, "Task not found in bulk request");
     }
 
     const canWriteTask = await hasProjectPermission({
@@ -201,13 +202,13 @@ tasksRouter.post("/bulk/delete", async (req: AuthenticatedRequest, res) => {
   }
 
   if (!req.user) {
-    return res.status(401).json({ error: "Unauthorized" });
+    return sendUnauthorized(res, "Unauthorized");
   }
 
   const existingTasks = await Promise.all(parsed.data.taskIds.map((taskId) => getTaskById(taskId)));
   for (const task of existingTasks) {
     if (!task) {
-      return res.status(404).json({ error: "Task not found in bulk request" });
+      return sendNotFound(res, "Task not found in bulk request");
     }
 
     const canWriteTask = await hasProjectPermission({
@@ -259,11 +260,11 @@ tasksRouter.get("/:id", async (req: AuthenticatedRequest, res) => {
 
   const task = await getTaskById(parsedParams.data.id);
   if (!task) {
-    return res.status(404).json({ error: "Task not found" });
+    return sendNotFound(res, "Task not found");
   }
 
   if (!req.user) {
-    return res.status(401).json({ error: "Unauthorized" });
+    return sendUnauthorized(res, "Unauthorized");
   }
 
   const canViewTask = await hasProjectPermission({
@@ -290,12 +291,12 @@ tasksRouter.post("/", async (req: AuthenticatedRequest, res) => {
   }
 
   if (!req.user) {
-    return res.status(401).json({ error: "Unauthorized" });
+    return sendUnauthorized(res, "Unauthorized");
   }
 
   const project = await getProjectById(parsed.data.projectId);
   if (!project) {
-    return res.status(404).json({ error: "Project not found" });
+    return sendNotFound(res, "Project not found");
   }
 
   const canWriteTask = await hasProjectPermission({
@@ -339,12 +340,12 @@ tasksRouter.put("/:id", async (req: AuthenticatedRequest, res) => {
   }
 
   if (!req.user) {
-    return res.status(401).json({ error: "Unauthorized" });
+    return sendUnauthorized(res, "Unauthorized");
   }
 
   const existingTask = await getTaskById(parsedParams.data.id);
   if (!existingTask) {
-    return res.status(404).json({ error: "Task not found" });
+    return sendNotFound(res, "Task not found");
   }
 
   const canWriteTask = await hasProjectPermission({
@@ -363,7 +364,7 @@ tasksRouter.put("/:id", async (req: AuthenticatedRequest, res) => {
 
   const task = await updateTask(parsedParams.data.id, parsed.data);
   if (!task) {
-    return res.status(404).json({ error: "Task not found" });
+    return sendNotFound(res, "Task not found");
   }
 
   await insertActivityLog({
@@ -388,12 +389,12 @@ tasksRouter.patch("/:id/status", async (req: AuthenticatedRequest, res) => {
   }
 
   if (!req.user) {
-    return res.status(401).json({ error: "Unauthorized" });
+    return sendUnauthorized(res, "Unauthorized");
   }
 
   const existingTask = await getTaskById(parsedParams.data.id);
   if (!existingTask) {
-    return res.status(404).json({ error: "Task not found" });
+    return sendNotFound(res, "Task not found");
   }
 
   const canWriteTask = await hasProjectPermission({
@@ -417,10 +418,10 @@ tasksRouter.patch("/:id/status", async (req: AuthenticatedRequest, res) => {
 
   if (!result.ok) {
     if (result.reason === "not_found") {
-      return res.status(404).json({ error: "Task not found" });
+      return sendNotFound(res, "Task not found");
     }
 
-    return res.status(409).json({ error: "Invalid status transition" });
+    return sendConflict(res, "Invalid status transition");
   }
 
   await insertActivityLog({
@@ -445,12 +446,12 @@ tasksRouter.delete("/:id", async (req: AuthenticatedRequest, res) => {
   }
 
   if (!req.user) {
-    return res.status(401).json({ error: "Unauthorized" });
+    return sendUnauthorized(res, "Unauthorized");
   }
 
   const existingTask = await getTaskById(parsedParams.data.id);
   if (!existingTask) {
-    return res.status(404).json({ error: "Task not found" });
+    return sendNotFound(res, "Task not found");
   }
 
   const canWriteTask = await hasProjectPermission({
@@ -469,7 +470,7 @@ tasksRouter.delete("/:id", async (req: AuthenticatedRequest, res) => {
 
   const deleted = await deleteTask(parsedParams.data.id);
   if (!deleted) {
-    return res.status(404).json({ error: "Task not found" });
+    return sendNotFound(res, "Task not found");
   }
 
   await insertActivityLog({

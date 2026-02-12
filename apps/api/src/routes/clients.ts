@@ -10,6 +10,7 @@ import {
   listClients,
   updateClient
 } from "../services/clients.service.js";
+import { sendNotFound, sendUnauthorized } from "../utils/http-error.js";
 import { sendValidationError } from "../utils/validation.js";
 
 export const clientsRouter = Router();
@@ -60,7 +61,7 @@ clientsRouter.get("/:id", async (req, res) => {
 
   const client = await getClientById(parsedParams.data.id);
   if (!client) {
-    return res.status(404).json({ error: "Client not found" });
+    return sendNotFound(res, "Client not found");
   }
 
   return res.status(200).json({ data: client });
@@ -73,7 +74,7 @@ clientsRouter.post("/", async (req: AuthenticatedRequest, res) => {
   }
 
   if (!req.user) {
-    return res.status(401).json({ error: "Unauthorized" });
+    return sendUnauthorized(res, "Unauthorized");
   }
 
   const client = await createClient(parsed.data);
@@ -99,12 +100,12 @@ clientsRouter.put("/:id", async (req: AuthenticatedRequest, res) => {
   }
 
   if (!req.user) {
-    return res.status(401).json({ error: "Unauthorized" });
+    return sendUnauthorized(res, "Unauthorized");
   }
 
   const client = await updateClient(parsedParams.data.id, parsed.data);
   if (!client) {
-    return res.status(404).json({ error: "Client not found" });
+    return sendNotFound(res, "Client not found");
   }
 
   await insertActivityLog({
@@ -124,12 +125,12 @@ clientsRouter.delete("/:id", async (req: AuthenticatedRequest, res) => {
   }
 
   if (!req.user) {
-    return res.status(401).json({ error: "Unauthorized" });
+    return sendUnauthorized(res, "Unauthorized");
   }
 
   const deleted = await deleteClient(parsedParams.data.id);
   if (!deleted) {
-    return res.status(404).json({ error: "Client not found" });
+    return sendNotFound(res, "Client not found");
   }
 
   await insertActivityLog({

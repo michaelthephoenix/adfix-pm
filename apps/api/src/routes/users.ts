@@ -12,6 +12,7 @@ import {
   setUserActiveStatus,
   updateUserProfile
 } from "../services/users.service.js";
+import { sendConflict, sendForbidden, sendNotFound, sendUnauthorized } from "../utils/http-error.js";
 import { sendValidationError } from "../utils/validation.js";
 
 export const usersRouter = Router();
@@ -96,7 +97,7 @@ usersRouter.get("/:id", async (req, res) => {
 
   const user = await getUserById(parsedParams.data.id);
   if (!user) {
-    return res.status(404).json({ error: "User not found" });
+    return sendNotFound(res, "User not found");
   }
 
   return res.status(200).json({ data: user });
@@ -114,16 +115,16 @@ usersRouter.patch("/:id/status", requireAdmin, async (req: AuthenticatedRequest,
   }
 
   if (!req.user) {
-    return res.status(401).json({ error: "Unauthorized" });
+    return sendUnauthorized(res, "Unauthorized");
   }
 
   if (req.user.id === parsedParams.data.id && parsedBody.data.isActive === false) {
-    return res.status(409).json({ error: "Admin cannot deactivate their own account" });
+    return sendConflict(res, "Admin cannot deactivate their own account");
   }
 
   const updatedUser = await setUserActiveStatus(parsedParams.data.id, parsedBody.data.isActive);
   if (!updatedUser) {
-    return res.status(404).json({ error: "User not found" });
+    return sendNotFound(res, "User not found");
   }
 
   await insertActivityLog({
@@ -151,12 +152,12 @@ usersRouter.post("/:id/project-roles/reset", requireAdmin, async (req: Authentic
   }
 
   if (!req.user) {
-    return res.status(401).json({ error: "Unauthorized" });
+    return sendUnauthorized(res, "Unauthorized");
   }
 
   const targetUser = await getUserById(parsedParams.data.id);
   if (!targetUser) {
-    return res.status(404).json({ error: "User not found" });
+    return sendNotFound(res, "User not found");
   }
 
   const result = await resetUserProjectRoles(parsedParams.data.id, parsedBody.data.projectId);
@@ -192,16 +193,16 @@ usersRouter.put("/:id", async (req: AuthenticatedRequest, res) => {
   }
 
   if (!req.user) {
-    return res.status(401).json({ error: "Unauthorized" });
+    return sendUnauthorized(res, "Unauthorized");
   }
 
   if (req.user.id !== parsedParams.data.id) {
-    return res.status(403).json({ error: "You can only update your own profile" });
+    return sendForbidden(res, "You can only update your own profile");
   }
 
   const user = await updateUserProfile(parsedParams.data.id, parsedBody.data);
   if (!user) {
-    return res.status(404).json({ error: "User not found" });
+    return sendNotFound(res, "User not found");
   }
 
   return res.status(200).json({ data: user });

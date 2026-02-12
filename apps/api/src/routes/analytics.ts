@@ -7,6 +7,7 @@ import {
   getTeamAnalytics,
   getTimelineAnalytics
 } from "../services/analytics.service.js";
+import { sendUnauthorized } from "../utils/http-error.js";
 
 export const analyticsRouter = Router();
 
@@ -29,7 +30,7 @@ function toCsv(headers: string[], rows: Record<string, unknown>[]): string {
 
 analyticsRouter.get("/dashboard", async (req: AuthenticatedRequest, res) => {
   if (!req.user) {
-    return res.status(401).json({ error: "Unauthorized" });
+    return sendUnauthorized(res, "Unauthorized");
   }
 
   const data = await getDashboardAnalytics(req.user.id);
@@ -38,7 +39,7 @@ analyticsRouter.get("/dashboard", async (req: AuthenticatedRequest, res) => {
 
 analyticsRouter.get("/projects", async (req: AuthenticatedRequest, res) => {
   if (!req.user) {
-    return res.status(401).json({ error: "Unauthorized" });
+    return sendUnauthorized(res, "Unauthorized");
   }
 
   const data = await getProjectsAnalytics(req.user.id);
@@ -47,7 +48,7 @@ analyticsRouter.get("/projects", async (req: AuthenticatedRequest, res) => {
 
 analyticsRouter.get("/team", async (req: AuthenticatedRequest, res) => {
   if (!req.user) {
-    return res.status(401).json({ error: "Unauthorized" });
+    return sendUnauthorized(res, "Unauthorized");
   }
 
   const data = await getTeamAnalytics(req.user.id);
@@ -56,7 +57,7 @@ analyticsRouter.get("/team", async (req: AuthenticatedRequest, res) => {
 
 analyticsRouter.get("/timeline", async (req: AuthenticatedRequest, res) => {
   if (!req.user) {
-    return res.status(401).json({ error: "Unauthorized" });
+    return sendUnauthorized(res, "Unauthorized");
   }
 
   const data = await getTimelineAnalytics(req.user.id);
@@ -65,7 +66,7 @@ analyticsRouter.get("/timeline", async (req: AuthenticatedRequest, res) => {
 
 analyticsRouter.get("/projects.csv", async (req: AuthenticatedRequest, res) => {
   if (!req.user) {
-    return res.status(401).json({ error: "Unauthorized" });
+    return sendUnauthorized(res, "Unauthorized");
   }
 
   const data = await getProjectsAnalytics(req.user.id);
@@ -86,7 +87,7 @@ analyticsRouter.get("/projects.csv", async (req: AuthenticatedRequest, res) => {
 
 analyticsRouter.get("/team.csv", async (req: AuthenticatedRequest, res) => {
   if (!req.user) {
-    return res.status(401).json({ error: "Unauthorized" });
+    return sendUnauthorized(res, "Unauthorized");
   }
 
   const data = await getTeamAnalytics(req.user.id);

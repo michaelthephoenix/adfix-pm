@@ -1,10 +1,11 @@
 import type { NextFunction, Response } from "express";
 import type { AuthenticatedRequest } from "../types/http.js";
 import { logAndSendForbidden } from "../utils/authz.js";
+import { sendUnauthorized } from "../utils/http-error.js";
 
 export async function requireAdmin(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   if (!req.user) {
-    return res.status(401).json({ error: "Unauthorized" });
+    return sendUnauthorized(res, "Unauthorized");
   }
 
   if (!req.user.isAdmin) {

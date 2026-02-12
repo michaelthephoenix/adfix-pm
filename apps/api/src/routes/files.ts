@@ -14,6 +14,7 @@ import {
 import { getProjectById } from "../services/projects.service.js";
 import { hasProjectPermission } from "../services/rbac.service.js";
 import { logAndSendForbidden } from "../utils/authz.js";
+import { sendNotFound, sendUnauthorized } from "../utils/http-error.js";
 import { sendValidationError } from "../utils/validation.js";
 
 export const filesRouter = Router();
@@ -99,7 +100,7 @@ filesRouter.use(requireAuth);
 
 filesRouter.get("/project/:projectId", async (req: AuthenticatedRequest, res) => {
   if (!req.user) {
-    return res.status(401).json({ error: "Unauthorized" });
+    return sendUnauthorized(res, "Unauthorized");
   }
 
   const parsedParams = projectParamsSchema.safeParse(req.params);
@@ -114,7 +115,7 @@ filesRouter.get("/project/:projectId", async (req: AuthenticatedRequest, res) =>
 
   const project = await getProjectById(parsedParams.data.projectId);
   if (!project) {
-    return res.status(404).json({ error: "Project not found" });
+    return sendNotFound(res, "Project not found");
   }
 
   const canViewProject = await hasProjectPermission({
@@ -149,12 +150,12 @@ filesRouter.post("/link", async (req: AuthenticatedRequest, res) => {
   }
 
   if (!req.user) {
-    return res.status(401).json({ error: "Unauthorized" });
+    return sendUnauthorized(res, "Unauthorized");
   }
 
   const project = await getProjectById(parsed.data.projectId);
   if (!project) {
-    return res.status(404).json({ error: "Project not found" });
+    return sendNotFound(res, "Project not found");
   }
 
   const canWriteFile = await hasProjectPermission({
@@ -193,12 +194,12 @@ filesRouter.post("/upload", async (req: AuthenticatedRequest, res) => {
   }
 
   if (!req.user) {
-    return res.status(401).json({ error: "Unauthorized" });
+    return sendUnauthorized(res, "Unauthorized");
   }
 
   const project = await getProjectById(parsed.data.projectId);
   if (!project) {
-    return res.status(404).json({ error: "Project not found" });
+    return sendNotFound(res, "Project not found");
   }
 
   const canWriteFile = await hasProjectPermission({
@@ -237,12 +238,12 @@ filesRouter.post("/upload-url", async (req: AuthenticatedRequest, res) => {
   }
 
   if (!req.user) {
-    return res.status(401).json({ error: "Unauthorized" });
+    return sendUnauthorized(res, "Unauthorized");
   }
 
   const project = await getProjectById(parsed.data.projectId);
   if (!project) {
-    return res.status(404).json({ error: "Project not found" });
+    return sendNotFound(res, "Project not found");
   }
 
   const canWriteFile = await hasProjectPermission({
@@ -285,12 +286,12 @@ filesRouter.post("/complete-upload", async (req: AuthenticatedRequest, res) => {
   }
 
   if (!req.user) {
-    return res.status(401).json({ error: "Unauthorized" });
+    return sendUnauthorized(res, "Unauthorized");
   }
 
   const project = await getProjectById(parsed.data.projectId);
   if (!project) {
-    return res.status(404).json({ error: "Project not found" });
+    return sendNotFound(res, "Project not found");
   }
 
   const canWriteFile = await hasProjectPermission({
@@ -330,11 +331,11 @@ filesRouter.get("/:id/download-url", async (req: AuthenticatedRequest, res) => {
 
   const file = await getFileById(parsed.data.id);
   if (!file) {
-    return res.status(404).json({ error: "File not found" });
+    return sendNotFound(res, "File not found");
   }
 
   if (!req.user) {
-    return res.status(401).json({ error: "Unauthorized" });
+    return sendUnauthorized(res, "Unauthorized");
   }
 
   const canViewFile = await hasProjectPermission({
@@ -381,12 +382,12 @@ filesRouter.delete("/:id", async (req: AuthenticatedRequest, res) => {
   }
 
   if (!req.user) {
-    return res.status(401).json({ error: "Unauthorized" });
+    return sendUnauthorized(res, "Unauthorized");
   }
 
   const existingFile = await getFileById(parsed.data.id);
   if (!existingFile) {
-    return res.status(404).json({ error: "File not found" });
+    return sendNotFound(res, "File not found");
   }
 
   const canWriteFile = await hasProjectPermission({
@@ -405,7 +406,7 @@ filesRouter.delete("/:id", async (req: AuthenticatedRequest, res) => {
 
   const deleted = await deleteFile(parsed.data.id);
   if (!deleted) {
-    return res.status(404).json({ error: "File not found" });
+    return sendNotFound(res, "File not found");
   }
 
   await insertActivityLog({
