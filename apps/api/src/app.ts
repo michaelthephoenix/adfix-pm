@@ -9,6 +9,7 @@ import { tasksRouter } from "./routes/tasks.js";
 import { filesRouter } from "./routes/files.js";
 import { analyticsRouter } from "./routes/analytics.js";
 import { usersRouter } from "./routes/users.js";
+import { apiRateLimiter, authRateLimiter } from "./middleware/rate-limit.js";
 import { errorHandler, notFoundHandler } from "./middleware/errors.js";
 
 export function createApp() {
@@ -21,13 +22,13 @@ export function createApp() {
   app.use(express.json({ limit: "1mb" }));
 
   app.use("/api", healthRouter);
-  app.use("/api/auth", authRouter);
-  app.use("/api/clients", clientsRouter);
-  app.use("/api/projects", projectsRouter);
-  app.use("/api/tasks", tasksRouter);
-  app.use("/api/files", filesRouter);
-  app.use("/api/analytics", analyticsRouter);
-  app.use("/api/users", usersRouter);
+  app.use("/api/auth", authRateLimiter, authRouter);
+  app.use("/api/clients", apiRateLimiter, clientsRouter);
+  app.use("/api/projects", apiRateLimiter, projectsRouter);
+  app.use("/api/tasks", apiRateLimiter, tasksRouter);
+  app.use("/api/files", apiRateLimiter, filesRouter);
+  app.use("/api/analytics", apiRateLimiter, analyticsRouter);
+  app.use("/api/users", apiRateLimiter, usersRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

@@ -26,6 +26,11 @@ Monorepo scaffold for the Adfix Project Management System.
 - `npm run test:api`: run integration tests (auth, clients, projects, phase transitions, activity logs)
 - `npm run test:api:coverage`: run integration tests with coverage thresholds
 
+## Rate Limiting
+- Auth routes (`/api/auth/*`): `AUTH_RATE_LIMIT_MAX` per `AUTH_RATE_LIMIT_WINDOW_MS`
+- Protected API routes: `API_RATE_LIMIT_MAX` per `API_RATE_LIMIT_WINDOW_MS`
+- In `NODE_ENV=test`, rate limiting is skipped so tests remain deterministic.
+
 ## Current Phase
 - Phase 0 foundation scaffolding
 - Initial schema migration in `apps/api/db/migrations/0001_init.sql`
