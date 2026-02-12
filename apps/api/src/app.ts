@@ -32,16 +32,21 @@ export function createApp() {
   }
   app.use(express.json({ limit: "1mb" }));
 
-  app.use("/api", healthRouter);
-  app.use("/api", docsRouter);
-  app.use("/api/auth", authRateLimiter, authRouter);
-  app.use("/api/clients", apiRateLimiter, clientsRouter);
-  app.use("/api/projects", apiRateLimiter, projectsRouter);
-  app.use("/api/tasks", apiRateLimiter, tasksRouter);
-  app.use("/api/files", apiRateLimiter, filesRouter);
-  app.use("/api/analytics", apiRateLimiter, analyticsRouter);
-  app.use("/api/users", apiRateLimiter, usersRouter);
-  app.use("/api/search", apiRateLimiter, searchRouter);
+  function mountApi(basePath: "/api" | "/api/v1") {
+    app.use(basePath, healthRouter);
+    app.use(basePath, docsRouter);
+    app.use(`${basePath}/auth`, authRateLimiter, authRouter);
+    app.use(`${basePath}/clients`, apiRateLimiter, clientsRouter);
+    app.use(`${basePath}/projects`, apiRateLimiter, projectsRouter);
+    app.use(`${basePath}/tasks`, apiRateLimiter, tasksRouter);
+    app.use(`${basePath}/files`, apiRateLimiter, filesRouter);
+    app.use(`${basePath}/analytics`, apiRateLimiter, analyticsRouter);
+    app.use(`${basePath}/users`, apiRateLimiter, usersRouter);
+    app.use(`${basePath}/search`, apiRateLimiter, searchRouter);
+  }
+
+  mountApi("/api");
+  mountApi("/api/v1");
 
   app.use(notFoundHandler);
   app.use(errorHandler);

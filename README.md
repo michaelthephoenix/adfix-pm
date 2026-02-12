@@ -33,10 +33,17 @@ Monorepo scaffold for the Adfix Project Management System.
 - In `NODE_ENV=test`, rate limiting is skipped so tests remain deterministic.
 
 ## API Docs + Observability
-- OpenAPI spec endpoint: `GET /api/docs.json`
-- Docs landing page: `GET /api/docs`
+- API base paths:
+  - Preferred (versioned): `/api/v1`
+  - Backward-compatible alias: `/api`
+- OpenAPI spec endpoints:
+  - `GET /api/v1/docs.json`
+  - `GET /api/docs.json`
+- Docs landing pages:
+  - `GET /api/v1/docs`
+  - `GET /api/docs`
 - Spec now includes all active route groups (`auth`, `clients`, `projects`, `tasks`, `files`, `analytics`, `search`, `users`, admin controls).
-- Health endpoint now includes database status: `GET /api/health`
+- Health endpoint includes database status on both prefixes (`/api/health`, `/api/v1/health`).
 - Every response includes `x-request-id` for tracing.
 
 ## Validation Error Shape

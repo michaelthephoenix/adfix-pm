@@ -77,6 +77,23 @@ describe("API integration", () => {
     expect(docsResponse.body.components.schemas).toHaveProperty("ErrorResponse");
   });
 
+  it("public: versioned /api/v1 prefix supports docs, health, and auth", async () => {
+    const healthResponse = await request(app).get("/api/v1/health");
+    expect(healthResponse.status).toBe(200);
+    expect(healthResponse.body.status).toBe("ok");
+
+    const docsResponse = await request(app).get("/api/v1/docs.json");
+    expect(docsResponse.status).toBe(200);
+    expect(docsResponse.body.servers[0].url).toContain("/api/v1");
+
+    const loginResponse = await request(app).post("/api/v1/auth/login").send({
+      email: adminUser.email,
+      password: adminUser.password
+    });
+    expect(loginResponse.status).toBe(200);
+    expect(loginResponse.body.accessToken).toBeTypeOf("string");
+  });
+
   it("auth: login, me, refresh, logout, logout-all", async () => {
     const firstLogin = await login();
 
