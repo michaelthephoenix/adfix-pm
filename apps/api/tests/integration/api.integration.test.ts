@@ -64,9 +64,14 @@ describe("API integration", () => {
     const healthResponse = await request(app).get("/api/health");
     expect(healthResponse.status).toBe(200);
     expect(healthResponse.body.status).toBe("ok");
-    expect(healthResponse.body.checks.database).toBe("ok");
+    expect(healthResponse.body.checks).toBeUndefined();
     expect(healthResponse.body).toHaveProperty("timestamp");
     expect(healthResponse.headers["x-request-id"]).toBeTypeOf("string");
+
+    const readyResponse = await request(app).get("/api/ready");
+    expect(readyResponse.status).toBe(200);
+    expect(readyResponse.body.status).toBe("ok");
+    expect(readyResponse.body.checks.database).toBe("ok");
 
     const docsResponse = await request(app).get("/api/docs.json");
     expect(docsResponse.status).toBe(200);
@@ -81,6 +86,11 @@ describe("API integration", () => {
     const healthResponse = await request(app).get("/api/v1/health");
     expect(healthResponse.status).toBe(200);
     expect(healthResponse.body.status).toBe("ok");
+
+    const readyResponse = await request(app).get("/api/v1/ready");
+    expect(readyResponse.status).toBe(200);
+    expect(readyResponse.body.status).toBe("ok");
+    expect(readyResponse.body.checks.database).toBe("ok");
 
     const docsResponse = await request(app).get("/api/v1/docs.json");
     expect(docsResponse.status).toBe(200);

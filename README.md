@@ -43,8 +43,18 @@ Monorepo scaffold for the Adfix Project Management System.
   - `GET /api/v1/docs`
   - `GET /api/docs`
 - Spec now includes all active route groups (`auth`, `clients`, `projects`, `tasks`, `files`, `analytics`, `search`, `users`, admin controls).
-- Health endpoint includes database status on both prefixes (`/api/health`, `/api/v1/health`).
+- Liveness endpoints:
+  - `/api/health`
+  - `/api/v1/health`
+- Readiness endpoints (database probe):
+  - `/api/ready`
+  - `/api/v1/ready`
 - Every response includes `x-request-id` for tracing.
+
+## Runtime Behavior
+- API server handles graceful shutdown on `SIGINT`/`SIGTERM`:
+  - stops accepting new HTTP connections
+  - closes PostgreSQL pool
 
 ## Validation Error Shape
 - Request validation failures return:

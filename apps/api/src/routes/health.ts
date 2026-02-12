@@ -3,7 +3,15 @@ import { pool } from "../db/pool.js";
 
 export const healthRouter = Router();
 
-healthRouter.get("/health", async (_req, res) => {
+healthRouter.get("/health", (_req, res) => {
+  res.status(200).json({
+    status: "ok",
+    service: "adfix-api",
+    timestamp: new Date().toISOString()
+  });
+});
+
+healthRouter.get("/ready", async (_req, res) => {
   let dbStatus: "ok" | "error" = "ok";
 
   try {
@@ -15,7 +23,7 @@ healthRouter.get("/health", async (_req, res) => {
   const statusCode = dbStatus === "ok" ? 200 : 503;
   const status = dbStatus === "ok" ? "ok" : "degraded";
 
-  res.status(statusCode).json({
+  return res.status(statusCode).json({
     status,
     service: "adfix-api",
     checks: {

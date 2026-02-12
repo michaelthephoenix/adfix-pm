@@ -75,10 +75,19 @@ export function buildOpenApiSpec(baseUrl: string) {
       "/health": {
         get: {
           tags: ["health"],
-          summary: "Health check with database probe",
+          summary: "Liveness check",
           responses: {
-            "200": { description: "Healthy" },
-            "503": { description: "Degraded (database unavailable)" }
+            "200": { description: "Service process is running" }
+          }
+        }
+      },
+      "/ready": {
+        get: {
+          tags: ["health"],
+          summary: "Readiness check (database connectivity)",
+          responses: {
+            "200": { description: "Ready to serve traffic" },
+            "503": { description: "Not ready (database unavailable)" }
           }
         }
       },
