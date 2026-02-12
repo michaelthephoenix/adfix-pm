@@ -656,6 +656,26 @@ describe("API integration", () => {
     expect(Array.isArray(timelineAnalyticsResponse.body.data)).toBe(true);
     expect(timelineAnalyticsResponse.body.data.length).toBeGreaterThan(0);
     expect(timelineAnalyticsResponse.body.data[0]).toHaveProperty("daysRemaining");
+
+    const projectsCsvResponse = await request(app)
+      .get("/api/analytics/projects.csv")
+      .set("Authorization", `Bearer ${auth.accessToken}`);
+
+    expect(projectsCsvResponse.status).toBe(200);
+    expect(projectsCsvResponse.headers["content-type"]).toContain("text/csv");
+    expect(projectsCsvResponse.text.split("\n")[0]).toBe(
+      "projectId,projectName,currentPhase,totalTasks,completedTasks,completionRatePct"
+    );
+
+    const teamCsvResponse = await request(app)
+      .get("/api/analytics/team.csv")
+      .set("Authorization", `Bearer ${auth.accessToken}`);
+
+    expect(teamCsvResponse.status).toBe(200);
+    expect(teamCsvResponse.headers["content-type"]).toContain("text/csv");
+    expect(teamCsvResponse.text.split("\n")[0]).toBe(
+      "userId,userName,userEmail,totalTasks,completedTasks,overdueTasks"
+    );
   });
 
   it("users: list, get, update own profile, block updating others", async () => {
