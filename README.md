@@ -23,6 +23,8 @@ Monorepo scaffold for the Adfix Project Management System.
 - `npm run db:migrate`: apply pending SQL migrations from `apps/api/db/migrations`
 - `npm run db:seed`: upsert the default admin user
 - `npm run typecheck`: run TypeScript checks for API + scripts
+- `npm run test:api`: run integration tests (auth, clients, projects, phase transitions, activity logs)
+- `npm run test:api:coverage`: run integration tests with coverage thresholds
 
 ## Current Phase
 - Phase 0 foundation scaffolding

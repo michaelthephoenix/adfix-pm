@@ -12,6 +12,8 @@
     "start:api": "npm --workspace @adfix/api run start",
     "typecheck": "npm --workspace @adfix/api run typecheck",
     "db:migrate": "npm --workspace @adfix/api run db:migrate",
-    "db:seed": "npm --workspace @adfix/api run db:seed"
+    "db:seed": "npm --workspace @adfix/api run db:seed",
+    "test:api": "npm --workspace @adfix/api run test",
+    "test:api:coverage": "npm --workspace @adfix/api run test:coverage"
   }
 }

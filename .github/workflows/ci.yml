@@ -23,3 +23,59 @@ jobs:
 
       - name: Typecheck API
         run: npm run typecheck
+
+  api-integration-tests:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: adfix_pm
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d adfix_pm"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/adfix_pm
+      JWT_ACCESS_SECRET: ci-access-secret-which-is-at-least-32-chars
+      JWT_REFRESH_SECRET: ci-refresh-secret-which-is-at-least-32-chars
+      ACCESS_TOKEN_TTL: 15m
+      REFRESH_TOKEN_DAYS: 30
+      SEED_ADMIN_EMAIL: admin@adfix.local
+      SEED_ADMIN_NAME: Adfix Admin
+      SEED_ADMIN_PASSWORD: ChangeMe123!
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm install
+
+      - name: Run migrations
+        run: npm run db:migrate
+
+      - name: Seed database
+        run: npm run db:seed
+
+      - name: Run API integration tests with coverage
+        run: npm run test:api:coverage
+
+      - name: Upload API coverage artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: api-coverage-report
+          path: apps/api/coverage
+          if-no-files-found: warn
