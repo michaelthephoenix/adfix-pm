@@ -201,13 +201,30 @@ describe("API integration", () => {
     expect(createResponse.status).toBe(201);
     const clientId = createResponse.body.data.id as string;
 
+    const secondCreateResponse = await request(app)
+      .post("/api/clients")
+      .set("Authorization", `Bearer ${auth.accessToken}`)
+      .send({ name: "Beta", company: "Beta Co" });
+    expect(secondCreateResponse.status).toBe(201);
+
     const listResponse = await request(app)
       .get("/api/clients")
       .set("Authorization", `Bearer ${auth.accessToken}`);
 
     expect(listResponse.status).toBe(200);
     expect(Array.isArray(listResponse.body.data)).toBe(true);
-    expect(listResponse.body.data.length).toBe(1);
+    expect(listResponse.body.data.length).toBe(2);
+
+    const sortedListResponse = await request(app)
+      .get("/api/clients")
+      .query({ sortBy: "name", sortOrder: "asc" })
+      .set("Authorization", `Bearer ${auth.accessToken}`);
+
+    expect(sortedListResponse.status).toBe(200);
+    expect(sortedListResponse.body.meta.sortBy).toBe("name");
+    expect(sortedListResponse.body.meta.sortOrder).toBe("asc");
+    expect(sortedListResponse.body.data[0].name).toBe("Acme");
+    expect(sortedListResponse.body.data[1].name).toBe("Beta");
 
     const updateResponse = await request(app)
       .put(`/api/clients/${clientId}`)
@@ -231,6 +248,7 @@ describe("API integration", () => {
     );
 
     expect(logRows.rows.map((row) => row.action)).toEqual([
+      "client_created",
       "client_created",
       "client_updated",
       "client_deleted"

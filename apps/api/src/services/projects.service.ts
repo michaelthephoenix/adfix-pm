@@ -23,6 +23,8 @@ type ListProjectsFilter = {
   deadlineTo?: string;
   page?: number;
   pageSize?: number;
+  sortBy?: "createdAt" | "updatedAt" | "deadline" | "name" | "priority";
+  sortOrder?: "asc" | "desc";
 };
 
 const PHASE_FLOW: Array<ProjectRow["current_phase"]> = [
@@ -70,6 +72,17 @@ export async function listProjects(filter: ListProjectsFilter, userId: string) {
   const page = filter.page ?? 1;
   const pageSize = filter.pageSize ?? 20;
   const offset = (page - 1) * pageSize;
+  const sortBy = filter.sortBy ?? "createdAt";
+  const sortOrder = filter.sortOrder ?? "desc";
+  const orderColumnMap: Record<NonNullable<ListProjectsFilter["sortBy"]>, string> = {
+    createdAt: "p.created_at",
+    updatedAt: "p.updated_at",
+    deadline: "p.deadline",
+    name: "p.name",
+    priority: "p.priority"
+  };
+  const orderColumn = orderColumnMap[sortBy];
+  const orderDirection = sortOrder.toUpperCase() === "ASC" ? "ASC" : "DESC";
 
   const where: string[] = [
     "p.deleted_at IS NULL",
@@ -121,7 +134,7 @@ export async function listProjects(filter: ListProjectsFilter, userId: string) {
     FROM projects p
     INNER JOIN clients c ON c.id = p.client_id AND c.deleted_at IS NULL
     WHERE ${where.join(" AND ")}
-    ORDER BY p.created_at DESC
+    ORDER BY ${orderColumn} ${orderDirection}
     LIMIT $${values.length + 1}
     OFFSET $${values.length + 2}
   `;

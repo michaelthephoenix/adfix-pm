@@ -40,7 +40,9 @@ const listTasksQuerySchema = z.object({
   phase: projectPhaseEnum.optional(),
   overdue: z.coerce.boolean().optional(),
   page: z.coerce.number().int().min(1).optional().default(1),
-  pageSize: z.coerce.number().int().min(1).max(100).optional().default(20)
+  pageSize: z.coerce.number().int().min(1).max(100).optional().default(20),
+  sortBy: z.enum(["createdAt", "updatedAt", "dueDate", "priority", "status", "title"]).optional().default("createdAt"),
+  sortOrder: z.enum(["asc", "desc"]).optional().default("desc")
 });
 
 const taskCreateSchema = z.object({
@@ -118,6 +120,8 @@ tasksRouter.get("/", async (req: AuthenticatedRequest, res) => {
     meta: {
       page: parsed.data.page,
       pageSize: parsed.data.pageSize,
+      sortBy: parsed.data.sortBy,
+      sortOrder: parsed.data.sortOrder,
       total: result.total
     }
   });

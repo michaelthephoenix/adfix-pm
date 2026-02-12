@@ -76,6 +76,12 @@ Monorepo scaffold for the Adfix Project Management System.
   - `error`: human-readable message
   - `requestId`: correlation id from `x-request-id`
 
+## Pagination + Sorting
+- List endpoints support consistent query controls:
+  - `page`, `pageSize`
+  - `sortBy`, `sortOrder`
+- List responses include these values in `meta` so frontend table state can be synchronized.
+
 ## Seed Profiles
 - `SEED_PROFILE=admin_only` (default): only admin user
 - `SEED_PROFILE=demo`: admin user + demo client/project/task data

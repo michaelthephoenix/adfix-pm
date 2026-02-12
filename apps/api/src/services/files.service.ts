@@ -28,10 +28,26 @@ type FileRow = {
   created_at: Date;
 };
 
-export async function listFilesByProjectId(projectId: string, input?: { page?: number; pageSize?: number }) {
+type FileSortBy = "createdAt" | "fileName" | "fileSize";
+type SortOrder = "asc" | "desc";
+
+const FILE_SORT_COLUMNS: Record<FileSortBy, string> = {
+  createdAt: "created_at",
+  fileName: "file_name",
+  fileSize: "file_size"
+};
+
+export async function listFilesByProjectId(
+  projectId: string,
+  input?: { page?: number; pageSize?: number; sortBy?: FileSortBy; sortOrder?: SortOrder }
+) {
   const page = input?.page ?? 1;
   const pageSize = input?.pageSize ?? 20;
   const offset = (page - 1) * pageSize;
+  const sortBy = input?.sortBy ?? "createdAt";
+  const sortOrder = input?.sortOrder ?? "desc";
+  const orderColumn = FILE_SORT_COLUMNS[sortBy];
+  const orderDirection = sortOrder.toUpperCase() === "ASC" ? "ASC" : "DESC";
 
   const [dataResult, countResult] = await Promise.all([
     pool.query<FileRow>(
@@ -52,7 +68,7 @@ export async function listFilesByProjectId(projectId: string, input?: { page?: n
        FROM files
        WHERE project_id = $1
          AND deleted_at IS NULL
-       ORDER BY created_at DESC
+       ORDER BY ${orderColumn} ${orderDirection}
        LIMIT $2 OFFSET $3`,
       [projectId, pageSize, offset]
     ),

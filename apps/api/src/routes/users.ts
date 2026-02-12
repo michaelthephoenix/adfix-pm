@@ -23,7 +23,9 @@ const idParamsSchema = z.object({
 
 const usersListQuerySchema = z.object({
   page: z.coerce.number().int().min(1).optional().default(1),
-  pageSize: z.coerce.number().int().min(1).max(100).optional().default(20)
+  pageSize: z.coerce.number().int().min(1).max(100).optional().default(20),
+  sortBy: z.enum(["createdAt", "updatedAt", "name", "email", "lastLoginAt"]).optional().default("createdAt"),
+  sortOrder: z.enum(["asc", "desc"]).optional().default("asc")
 });
 
 const auditLogsQuerySchema = z.object({
@@ -33,7 +35,9 @@ const auditLogsQuerySchema = z.object({
   from: z.string().datetime().optional(),
   to: z.string().datetime().optional(),
   page: z.coerce.number().int().min(1).optional().default(1),
-  pageSize: z.coerce.number().int().min(1).max(100).optional().default(20)
+  pageSize: z.coerce.number().int().min(1).max(100).optional().default(20),
+  sortBy: z.enum(["createdAt", "action"]).optional().default("createdAt"),
+  sortOrder: z.enum(["asc", "desc"]).optional().default("desc")
 });
 
 const userUpdateSchema = z
@@ -67,6 +71,8 @@ usersRouter.get("/", async (req, res) => {
     meta: {
       page: parsedQuery.data.page,
       pageSize: parsedQuery.data.pageSize,
+      sortBy: parsedQuery.data.sortBy,
+      sortOrder: parsedQuery.data.sortOrder,
       total: result.total
     }
   });
@@ -84,6 +90,8 @@ usersRouter.get("/audit-logs", requireAdmin, async (req, res) => {
     meta: {
       page: parsedQuery.data.page,
       pageSize: parsedQuery.data.pageSize,
+      sortBy: parsedQuery.data.sortBy,
+      sortOrder: parsedQuery.data.sortOrder,
       total: result.total
     }
   });

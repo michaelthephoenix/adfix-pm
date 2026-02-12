@@ -40,7 +40,9 @@ const listProjectsQuerySchema = z.object({
   deadlineFrom: isoDateSchema.optional(),
   deadlineTo: isoDateSchema.optional(),
   page: z.coerce.number().int().min(1).optional().default(1),
-  pageSize: z.coerce.number().int().min(1).max(100).optional().default(20)
+  pageSize: z.coerce.number().int().min(1).max(100).optional().default(20),
+  sortBy: z.enum(["createdAt", "updatedAt", "deadline", "name", "priority"]).optional().default("createdAt"),
+  sortOrder: z.enum(["asc", "desc"]).optional().default("desc")
 });
 
 const projectCreateSchema = z.object({
@@ -95,6 +97,8 @@ projectsRouter.get("/", async (req: AuthenticatedRequest, res) => {
     meta: {
       page: parsed.data.page,
       pageSize: parsed.data.pageSize,
+      sortBy: parsed.data.sortBy,
+      sortOrder: parsed.data.sortOrder,
       total: result.total
     }
   });

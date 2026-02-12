@@ -39,7 +39,9 @@ const projectParamsSchema = z.object({
 
 const fileListQuerySchema = z.object({
   page: z.coerce.number().int().min(1).optional().default(1),
-  pageSize: z.coerce.number().int().min(1).max(100).optional().default(20)
+  pageSize: z.coerce.number().int().min(1).max(100).optional().default(20),
+  sortBy: z.enum(["createdAt", "fileName", "fileSize"]).optional().default("createdAt"),
+  sortOrder: z.enum(["asc", "desc"]).optional().default("desc")
 });
 
 const fileParamsSchema = z.object({
@@ -138,6 +140,8 @@ filesRouter.get("/project/:projectId", async (req: AuthenticatedRequest, res) =>
     meta: {
       page: parsedQuery.data.page,
       pageSize: parsedQuery.data.pageSize,
+      sortBy: parsedQuery.data.sortBy,
+      sortOrder: parsedQuery.data.sortOrder,
       total: result.total
     }
   });

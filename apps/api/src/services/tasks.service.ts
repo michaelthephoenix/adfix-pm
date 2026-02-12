@@ -33,6 +33,8 @@ type ListTasksFilter = {
   overdue?: boolean;
   page?: number;
   pageSize?: number;
+  sortBy?: "createdAt" | "updatedAt" | "dueDate" | "priority" | "status" | "title";
+  sortOrder?: "asc" | "desc";
 };
 
 const TASK_STATUS_TRANSITIONS: Record<TaskStatus, TaskStatus[]> = {
@@ -50,6 +52,18 @@ export async function listTasks(filter: ListTasksFilter, userId: string) {
   const page = filter.page ?? 1;
   const pageSize = filter.pageSize ?? 20;
   const offset = (page - 1) * pageSize;
+  const sortBy = filter.sortBy ?? "createdAt";
+  const sortOrder = filter.sortOrder ?? "desc";
+  const orderColumnMap: Record<NonNullable<ListTasksFilter["sortBy"]>, string> = {
+    createdAt: "t.created_at",
+    updatedAt: "t.updated_at",
+    dueDate: "t.due_date",
+    priority: "t.priority",
+    status: "t.status",
+    title: "t.title"
+  };
+  const orderColumn = orderColumnMap[sortBy];
+  const orderDirection = sortOrder.toUpperCase() === "ASC" ? "ASC" : "DESC";
 
   const where: string[] = [
     "t.deleted_at IS NULL",
@@ -107,7 +121,7 @@ export async function listTasks(filter: ListTasksFilter, userId: string) {
        t.updated_at
      FROM tasks t
      WHERE ${where.join(" AND ")}
-     ORDER BY t.created_at DESC
+     ORDER BY ${orderColumn} ${orderDirection}
      LIMIT $${values.length + 1}
      OFFSET $${values.length + 2}`;
 

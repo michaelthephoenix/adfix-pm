@@ -11,17 +11,35 @@ type ClientRow = {
   updated_at: Date;
 };
 
-export async function listClients(input?: { page?: number; pageSize?: number }) {
+type ClientSortBy = "createdAt" | "updatedAt" | "name";
+type SortOrder = "asc" | "desc";
+
+const CLIENT_SORT_COLUMNS: Record<ClientSortBy, string> = {
+  createdAt: "created_at",
+  updatedAt: "updated_at",
+  name: "name"
+};
+
+export async function listClients(input?: {
+  page?: number;
+  pageSize?: number;
+  sortBy?: ClientSortBy;
+  sortOrder?: SortOrder;
+}) {
   const page = input?.page ?? 1;
   const pageSize = input?.pageSize ?? 20;
   const offset = (page - 1) * pageSize;
+  const sortBy = input?.sortBy ?? "createdAt";
+  const sortOrder = input?.sortOrder ?? "desc";
+  const orderColumn = CLIENT_SORT_COLUMNS[sortBy];
+  const orderDirection = sortOrder.toUpperCase() === "ASC" ? "ASC" : "DESC";
 
   const [dataResult, countResult] = await Promise.all([
     pool.query<ClientRow>(
       `SELECT id, name, company, email, phone, notes, created_at, updated_at
        FROM clients
        WHERE deleted_at IS NULL
-       ORDER BY created_at DESC
+       ORDER BY ${orderColumn} ${orderDirection}
        LIMIT $1 OFFSET $2`,
       [pageSize, offset]
     ),

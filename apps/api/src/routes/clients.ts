@@ -31,7 +31,9 @@ const idParamsSchema = z.object({
 
 const clientsListQuerySchema = z.object({
   page: z.coerce.number().int().min(1).optional().default(1),
-  pageSize: z.coerce.number().int().min(1).max(100).optional().default(20)
+  pageSize: z.coerce.number().int().min(1).max(100).optional().default(20),
+  sortBy: z.enum(["createdAt", "updatedAt", "name"]).optional().default("createdAt"),
+  sortOrder: z.enum(["asc", "desc"]).optional().default("desc")
 });
 
 clientsRouter.use(requireAuth);
@@ -48,6 +50,8 @@ clientsRouter.get("/", async (req, res) => {
     meta: {
       page: parsedQuery.data.page,
       pageSize: parsedQuery.data.pageSize,
+      sortBy: parsedQuery.data.sortBy,
+      sortOrder: parsedQuery.data.sortOrder,
       total: result.total
     }
   });

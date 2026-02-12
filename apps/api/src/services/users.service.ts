@@ -23,10 +23,26 @@ type AuditLogRow = {
   user_email: string | null;
 };
 
-export async function listUsers(input?: { page?: number; pageSize?: number }) {
+export async function listUsers(input?: {
+  page?: number;
+  pageSize?: number;
+  sortBy?: "createdAt" | "updatedAt" | "name" | "email" | "lastLoginAt";
+  sortOrder?: "asc" | "desc";
+}) {
+  const sortBy = input?.sortBy ?? "createdAt";
+  const sortOrder = input?.sortOrder ?? "asc";
   const page = input?.page ?? 1;
   const pageSize = input?.pageSize ?? 20;
   const offset = (page - 1) * pageSize;
+  const orderColumnMap: Record<"createdAt" | "updatedAt" | "name" | "email" | "lastLoginAt", string> = {
+    createdAt: "created_at",
+    updatedAt: "updated_at",
+    name: "name",
+    email: "email",
+    lastLoginAt: "last_login_at"
+  };
+  const orderColumn = orderColumnMap[sortBy];
+  const orderDirection = sortOrder.toUpperCase() === "DESC" ? "DESC" : "ASC";
 
   const [dataResult, countResult] = await Promise.all([
     pool.query<UserRow>(
@@ -42,7 +58,7 @@ export async function listUsers(input?: { page?: number; pageSize?: number }) {
          updated_at
        FROM users
        WHERE deleted_at IS NULL
-       ORDER BY created_at ASC
+       ORDER BY ${orderColumn} ${orderDirection}
        LIMIT $1 OFFSET $2`,
       [pageSize, offset]
     ),
@@ -172,10 +188,20 @@ export async function listAuditLogs(input: {
   to?: string;
   page?: number;
   pageSize?: number;
+  sortBy?: "createdAt" | "action";
+  sortOrder?: "asc" | "desc";
 }) {
+  const sortBy = input.sortBy ?? "createdAt";
+  const sortOrder = input.sortOrder ?? "desc";
   const page = input.page ?? 1;
   const pageSize = input.pageSize ?? 20;
   const offset = (page - 1) * pageSize;
+  const orderColumnMap: Record<"createdAt" | "action", string> = {
+    createdAt: "a.created_at",
+    action: "a.action"
+  };
+  const orderColumn = orderColumnMap[sortBy];
+  const orderDirection = sortOrder.toUpperCase() === "ASC" ? "ASC" : "DESC";
 
   const where: string[] = ["1=1"];
   const values: Array<string> = [];
@@ -215,7 +241,7 @@ export async function listAuditLogs(input: {
        FROM activity_log a
        LEFT JOIN users u ON u.id = a.user_id
        WHERE ${where.join(" AND ")}
-       ORDER BY a.created_at DESC
+       ORDER BY ${orderColumn} ${orderDirection}
        LIMIT $${values.length + 1}
        OFFSET $${values.length + 2}`,
       [...values, pageSize.toString(), offset.toString()]
