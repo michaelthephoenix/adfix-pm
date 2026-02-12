@@ -287,6 +287,7 @@ describe("API integration", () => {
 
     expect(filteredList.status).toBe(200);
     expect(filteredList.body.data.length).toBe(1);
+    expect(filteredList.body.data[0].current_user_role).toBe("owner");
 
     const updateResponse = await request(app)
       .put(`/api/projects/${projectId}`)
@@ -542,6 +543,7 @@ describe("API integration", () => {
       .set("Authorization", `Bearer ${auth.accessToken}`);
 
     expect(projectDetail.status).toBe(200);
+    expect(projectDetail.body.data.current_user_role).toBe("owner");
     expect(projectDetail.body.data.task_summary).toEqual({
       total: 3,
       pending: 1,
@@ -1191,6 +1193,7 @@ describe("API integration", () => {
       .get(`/api/projects/${projectId}`)
       .set("Authorization", `Bearer ${viewerAuth.accessToken}`);
     expect(getProjectResponse.status).toBe(200);
+    expect(getProjectResponse.body.data.current_user_role).toBe("viewer");
 
     const listTasksResponse = await request(app)
       .get(`/api/tasks?projectId=${projectId}`)

@@ -109,6 +109,7 @@ Monorepo scaffold for the Adfix Project Management System.
   - `owner`: full permissions including project delete
 - `search` and `analytics` responses are scoped to projects the requester can access.
 - RBAC denials are audit-logged as `authz_denied` in `activity_log`.
+- Project list/detail responses include `current_user_role` (`owner|manager|member|viewer`) for frontend action gating.
 
 ## Admin Controls
 - Users table now includes `is_admin` (migration: `0002_admin_controls.sql`).

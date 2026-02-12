@@ -1,4 +1,5 @@
 import { pool } from "../db/pool.js";
+import type { ProjectRole } from "./rbac.service.js";
 
 type ProjectRow = {
   id: string;
@@ -13,6 +14,11 @@ type ProjectRow = {
   created_by: string;
   created_at: Date;
   updated_at: Date;
+};
+
+type AccessibleProjectRow = ProjectRow & {
+  client_name: string;
+  current_user_role: ProjectRole | null;
 };
 
 type ListProjectsFilter = {
@@ -49,6 +55,7 @@ type TransitionResult =
 
 type ProjectDetail = ProjectRow & {
   client_name: string;
+  current_user_role: ProjectRole | null;
   task_summary: {
     total: number;
     pending: number;
@@ -86,12 +93,7 @@ export async function listProjects(filter: ListProjectsFilter, userId: string) {
 
   const where: string[] = [
     "p.deleted_at IS NULL",
-    `(p.created_by = $1 OR EXISTS (
-      SELECT 1
-      FROM project_team pt
-      WHERE pt.project_id = p.id
-        AND pt.user_id = $1
-    ))`
+    "(p.created_by = $1 OR pt.user_id IS NOT NULL)"
   ];
   const values: Array<string> = [userId];
 
@@ -121,6 +123,11 @@ export async function listProjects(filter: ListProjectsFilter, userId: string) {
       p.id,
       p.client_id,
       c.name AS client_name,
+      CASE
+        WHEN p.created_by = $1 THEN 'owner'
+        WHEN pt.role IS NULL THEN NULL
+        ELSE LOWER(pt.role)
+      END AS current_user_role,
       p.name,
       p.description,
       p.current_phase,
@@ -133,6 +140,9 @@ export async function listProjects(filter: ListProjectsFilter, userId: string) {
       p.updated_at
     FROM projects p
     INNER JOIN clients c ON c.id = p.client_id AND c.deleted_at IS NULL
+    LEFT JOIN project_team pt
+      ON pt.project_id = p.id
+     AND pt.user_id = $1
     WHERE ${where.join(" AND ")}
     ORDER BY ${orderColumn} ${orderDirection}
     LIMIT $${values.length + 1}
@@ -143,11 +153,14 @@ export async function listProjects(filter: ListProjectsFilter, userId: string) {
     SELECT COUNT(*)::text AS total
     FROM projects p
     INNER JOIN clients c ON c.id = p.client_id AND c.deleted_at IS NULL
+    LEFT JOIN project_team pt
+      ON pt.project_id = p.id
+     AND pt.user_id = $1
     WHERE ${where.join(" AND ")}
   `;
 
   const [dataResult, countResult] = await Promise.all([
-    pool.query<ProjectRow & { client_name: string }>(dataQuery, [...values, pageSize.toString(), offset.toString()]),
+    pool.query<AccessibleProjectRow>(dataQuery, [...values, pageSize.toString(), offset.toString()]),
     pool.query<{ total: string }>(countQuery, values)
   ]);
 
@@ -184,12 +197,17 @@ export async function getProjectById(projectId: string) {
   return result.rows[0] ?? null;
 }
 
-export async function getProjectDetailById(projectId: string): Promise<ProjectDetail | null> {
-  const projectResult = await pool.query<ProjectRow & { client_name: string }>(
+export async function getProjectDetailById(projectId: string, userId: string): Promise<ProjectDetail | null> {
+  const projectResult = await pool.query<AccessibleProjectRow>(
     `SELECT
        p.id,
        p.client_id,
        c.name AS client_name,
+       CASE
+         WHEN p.created_by = $2 THEN 'owner'
+         WHEN pt.role IS NULL THEN NULL
+         ELSE LOWER(pt.role)
+       END AS current_user_role,
        p.name,
        p.description,
        p.current_phase,
@@ -202,10 +220,13 @@ export async function getProjectDetailById(projectId: string): Promise<ProjectDe
        p.updated_at
      FROM projects p
      INNER JOIN clients c ON c.id = p.client_id AND c.deleted_at IS NULL
+     LEFT JOIN project_team pt
+       ON pt.project_id = p.id
+      AND pt.user_id = $2
      WHERE p.id = $1
        AND p.deleted_at IS NULL
      LIMIT 1`,
-    [projectId]
+    [projectId, userId]
   );
 
   const project = projectResult.rows[0];

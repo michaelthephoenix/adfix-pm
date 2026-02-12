@@ -114,7 +114,7 @@ projectsRouter.get("/:id", async (req: AuthenticatedRequest, res) => {
     return sendValidationError(res, "Invalid project id", parsedParams.error);
   }
 
-  const project = await getProjectDetailById(parsedParams.data.id);
+  const project = await getProjectDetailById(parsedParams.data.id, req.user.id);
   if (!project) {
     return sendNotFound(res, "Project not found");
   }
@@ -146,7 +146,7 @@ projectsRouter.get("/:id/activity", async (req: AuthenticatedRequest, res) => {
     return sendValidationError(res, "Invalid project id", parsedParams.error);
   }
 
-  const project = await getProjectDetailById(parsedParams.data.id);
+  const project = await getProjectDetailById(parsedParams.data.id, req.user.id);
   if (!project) {
     return sendNotFound(res, "Project not found");
   }
@@ -179,7 +179,7 @@ projectsRouter.get("/:id/team", async (req: AuthenticatedRequest, res) => {
     return sendValidationError(res, "Invalid project id", parsedParams.error);
   }
 
-  const project = await getProjectDetailById(parsedParams.data.id);
+  const project = await getProjectDetailById(parsedParams.data.id, req.user.id);
   if (!project) {
     return sendNotFound(res, "Project not found");
   }
