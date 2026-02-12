@@ -7,6 +7,7 @@ import {
   addProjectTeamMember,
   createProject,
   deleteProject,
+  getProjectById,
   getProjectDetailById,
   listProjectTeamMembers,
   listProjects,
@@ -14,6 +15,7 @@ import {
   transitionProjectPhase,
   updateProject
 } from "../services/projects.service.js";
+import { hasProjectPermission } from "../services/rbac.service.js";
 import { sendValidationError } from "../utils/validation.js";
 
 export const projectsRouter = Router();
@@ -70,18 +72,22 @@ const projectTeamParamsSchema = z.object({
 
 const projectTeamAddSchema = z.object({
   userId: z.string().uuid(),
-  role: z.string().trim().min(1).max(100)
+  role: z.enum(["manager", "member", "viewer"])
 });
 
 projectsRouter.use(requireAuth);
 
-projectsRouter.get("/", async (req, res) => {
+projectsRouter.get("/", async (req: AuthenticatedRequest, res) => {
+  if (!req.user) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
   const parsed = listProjectsQuerySchema.safeParse(req.query);
   if (!parsed.success) {
     return sendValidationError(res, "Invalid projects query", parsed.error);
   }
 
-  const result = await listProjects(parsed.data);
+  const result = await listProjects(parsed.data, req.user.id);
   return res.status(200).json({
     data: result.rows,
     meta: {
@@ -92,7 +98,11 @@ projectsRouter.get("/", async (req, res) => {
   });
 });
 
-projectsRouter.get("/:id", async (req, res) => {
+projectsRouter.get("/:id", async (req: AuthenticatedRequest, res) => {
+  if (!req.user) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
   const parsedParams = idParamsSchema.safeParse(req.params);
   if (!parsedParams.success) {
     return sendValidationError(res, "Invalid project id", parsedParams.error);
@@ -101,12 +111,25 @@ projectsRouter.get("/:id", async (req, res) => {
   const project = await getProjectDetailById(parsedParams.data.id);
   if (!project) {
     return res.status(404).json({ error: "Project not found" });
+  }
+
+  const canView = await hasProjectPermission({
+    projectId: parsedParams.data.id,
+    userId: req.user.id,
+    permission: "project:view"
+  });
+  if (!canView) {
+    return res.status(403).json({ error: "Forbidden" });
   }
 
   return res.status(200).json({ data: project });
 });
 
-projectsRouter.get("/:id/activity", async (req, res) => {
+projectsRouter.get("/:id/activity", async (req: AuthenticatedRequest, res) => {
+  if (!req.user) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
   const parsedParams = idParamsSchema.safeParse(req.params);
   if (!parsedParams.success) {
     return sendValidationError(res, "Invalid project id", parsedParams.error);
@@ -115,13 +138,26 @@ projectsRouter.get("/:id/activity", async (req, res) => {
   const project = await getProjectDetailById(parsedParams.data.id);
   if (!project) {
     return res.status(404).json({ error: "Project not found" });
+  }
+
+  const canView = await hasProjectPermission({
+    projectId: parsedParams.data.id,
+    userId: req.user.id,
+    permission: "project:view"
+  });
+  if (!canView) {
+    return res.status(403).json({ error: "Forbidden" });
   }
 
   const activity = await listProjectActivity(parsedParams.data.id);
   return res.status(200).json({ data: activity });
 });
 
-projectsRouter.get("/:id/team", async (req, res) => {
+projectsRouter.get("/:id/team", async (req: AuthenticatedRequest, res) => {
+  if (!req.user) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
   const parsedParams = idParamsSchema.safeParse(req.params);
   if (!parsedParams.success) {
     return sendValidationError(res, "Invalid project id", parsedParams.error);
@@ -130,6 +166,15 @@ projectsRouter.get("/:id/team", async (req, res) => {
   const project = await getProjectDetailById(parsedParams.data.id);
   if (!project) {
     return res.status(404).json({ error: "Project not found" });
+  }
+
+  const canView = await hasProjectPermission({
+    projectId: parsedParams.data.id,
+    userId: req.user.id,
+    permission: "project:view"
+  });
+  if (!canView) {
+    return res.status(403).json({ error: "Forbidden" });
   }
 
   const members = await listProjectTeamMembers(parsedParams.data.id);
@@ -149,6 +194,20 @@ projectsRouter.post("/:id/team", async (req: AuthenticatedRequest, res) => {
 
   if (!req.user) {
     return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  const project = await getProjectById(parsedParams.data.id);
+  if (!project) {
+    return res.status(404).json({ error: "Project not found" });
+  }
+
+  const canManageTeam = await hasProjectPermission({
+    projectId: parsedParams.data.id,
+    userId: req.user.id,
+    permission: "team:manage"
+  });
+  if (!canManageTeam) {
+    return res.status(403).json({ error: "Forbidden" });
   }
 
   const result = await addProjectTeamMember({
@@ -186,6 +245,20 @@ projectsRouter.delete("/:id/team/:userId", async (req: AuthenticatedRequest, res
 
   if (!req.user) {
     return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  const project = await getProjectById(parsedParams.data.id);
+  if (!project) {
+    return res.status(404).json({ error: "Project not found" });
+  }
+
+  const canManageTeam = await hasProjectPermission({
+    projectId: parsedParams.data.id,
+    userId: req.user.id,
+    permission: "team:manage"
+  });
+  if (!canManageTeam) {
+    return res.status(403).json({ error: "Forbidden" });
   }
 
   const deleted = await removeProjectTeamMember(parsedParams.data.id, parsedParams.data.userId);
@@ -249,6 +322,20 @@ projectsRouter.put("/:id", async (req: AuthenticatedRequest, res) => {
     return res.status(401).json({ error: "Unauthorized" });
   }
 
+  const existingProject = await getProjectById(parsedParams.data.id);
+  if (!existingProject) {
+    return res.status(404).json({ error: "Project not found" });
+  }
+
+  const canUpdateProject = await hasProjectPermission({
+    projectId: parsedParams.data.id,
+    userId: req.user.id,
+    permission: "project:update"
+  });
+  if (!canUpdateProject) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+
   const project = await updateProject(parsedParams.data.id, parsed.data);
   if (!project) {
     return res.status(404).json({ error: "Project not found" });
@@ -279,6 +366,20 @@ projectsRouter.patch("/:id/phase", async (req: AuthenticatedRequest, res) => {
     return res.status(401).json({ error: "Unauthorized" });
   }
 
+  const existingProject = await getProjectById(parsedParams.data.id);
+  if (!existingProject) {
+    return res.status(404).json({ error: "Project not found" });
+  }
+
+  const canUpdateProject = await hasProjectPermission({
+    projectId: parsedParams.data.id,
+    userId: req.user.id,
+    permission: "project:update"
+  });
+  if (!canUpdateProject) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+
   const result = await transitionProjectPhase({
     projectId: parsedParams.data.id,
     nextPhase: parsed.data.phase,
@@ -305,6 +406,20 @@ projectsRouter.delete("/:id", async (req: AuthenticatedRequest, res) => {
 
   if (!req.user) {
     return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  const existingProject = await getProjectById(parsedParams.data.id);
+  if (!existingProject) {
+    return res.status(404).json({ error: "Project not found" });
+  }
+
+  const canDeleteProject = await hasProjectPermission({
+    projectId: parsedParams.data.id,
+    userId: req.user.id,
+    permission: "project:delete"
+  });
+  if (!canDeleteProject) {
+    return res.status(403).json({ error: "Forbidden" });
   }
 
   const deleted = await deleteProject(parsedParams.data.id, req.user.id);

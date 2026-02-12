@@ -13,6 +13,8 @@ import {
   transitionTaskStatus,
   updateTask
 } from "../services/tasks.service.js";
+import { getProjectById } from "../services/projects.service.js";
+import { hasProjectPermission } from "../services/rbac.service.js";
 import { sendValidationError } from "../utils/validation.js";
 
 export const tasksRouter = Router();
@@ -77,13 +79,33 @@ const idParamsSchema = z.object({
 
 tasksRouter.use(requireAuth);
 
-tasksRouter.get("/", async (req, res) => {
+tasksRouter.get("/", async (req: AuthenticatedRequest, res) => {
+  if (!req.user) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
   const parsed = listTasksQuerySchema.safeParse(req.query);
   if (!parsed.success) {
     return sendValidationError(res, "Invalid tasks query", parsed.error);
   }
 
-  const result = await listTasks(parsed.data);
+  if (parsed.data.projectId) {
+    const project = await getProjectById(parsed.data.projectId);
+    if (!project) {
+      return res.status(404).json({ error: "Project not found" });
+    }
+
+    const canViewProject = await hasProjectPermission({
+      projectId: parsed.data.projectId,
+      userId: req.user.id,
+      permission: "project:view"
+    });
+    if (!canViewProject) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+  }
+
+  const result = await listTasks(parsed.data, req.user.id);
   return res.status(200).json({
     data: result.rows,
     meta: {
@@ -102,6 +124,22 @@ tasksRouter.post("/bulk/status", async (req: AuthenticatedRequest, res) => {
 
   if (!req.user) {
     return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  const loadedTasks = await Promise.all(parsed.data.taskIds.map((taskId) => getTaskById(taskId)));
+  for (const task of loadedTasks) {
+    if (!task) {
+      return res.status(404).json({ error: "Task not found in bulk request" });
+    }
+
+    const canWriteTask = await hasProjectPermission({
+      projectId: task.project_id,
+      userId: req.user.id,
+      permission: "task:write"
+    });
+    if (!canWriteTask) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
   }
 
   const originalTasks = await Promise.all(parsed.data.taskIds.map((taskId) => getTaskById(taskId)));
@@ -156,6 +194,21 @@ tasksRouter.post("/bulk/delete", async (req: AuthenticatedRequest, res) => {
   }
 
   const existingTasks = await Promise.all(parsed.data.taskIds.map((taskId) => getTaskById(taskId)));
+  for (const task of existingTasks) {
+    if (!task) {
+      return res.status(404).json({ error: "Task not found in bulk request" });
+    }
+
+    const canWriteTask = await hasProjectPermission({
+      projectId: task.project_id,
+      userId: req.user.id,
+      permission: "task:write"
+    });
+    if (!canWriteTask) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+  }
+
   const existingById = new Map(
     existingTasks.filter((t): t is NonNullable<typeof t> => Boolean(t)).map((task) => [task.id, task])
   );
@@ -182,7 +235,7 @@ tasksRouter.post("/bulk/delete", async (req: AuthenticatedRequest, res) => {
   });
 });
 
-tasksRouter.get("/:id", async (req, res) => {
+tasksRouter.get("/:id", async (req: AuthenticatedRequest, res) => {
   const parsedParams = idParamsSchema.safeParse(req.params);
   if (!parsedParams.success) {
     return sendValidationError(res, "Invalid task id", parsedParams.error);
@@ -191,6 +244,19 @@ tasksRouter.get("/:id", async (req, res) => {
   const task = await getTaskById(parsedParams.data.id);
   if (!task) {
     return res.status(404).json({ error: "Task not found" });
+  }
+
+  if (!req.user) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  const canViewTask = await hasProjectPermission({
+    projectId: task.project_id,
+    userId: req.user.id,
+    permission: "project:view"
+  });
+  if (!canViewTask) {
+    return res.status(403).json({ error: "Forbidden" });
   }
 
   return res.status(200).json({ data: task });
@@ -204,6 +270,20 @@ tasksRouter.post("/", async (req: AuthenticatedRequest, res) => {
 
   if (!req.user) {
     return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  const project = await getProjectById(parsed.data.projectId);
+  if (!project) {
+    return res.status(404).json({ error: "Project not found" });
+  }
+
+  const canWriteTask = await hasProjectPermission({
+    projectId: parsed.data.projectId,
+    userId: req.user.id,
+    permission: "task:write"
+  });
+  if (!canWriteTask) {
+    return res.status(403).json({ error: "Forbidden" });
   }
 
   const task = await createTask({
@@ -234,6 +314,20 @@ tasksRouter.put("/:id", async (req: AuthenticatedRequest, res) => {
 
   if (!req.user) {
     return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  const existingTask = await getTaskById(parsedParams.data.id);
+  if (!existingTask) {
+    return res.status(404).json({ error: "Task not found" });
+  }
+
+  const canWriteTask = await hasProjectPermission({
+    projectId: existingTask.project_id,
+    userId: req.user.id,
+    permission: "task:write"
+  });
+  if (!canWriteTask) {
+    return res.status(403).json({ error: "Forbidden" });
   }
 
   const task = await updateTask(parsedParams.data.id, parsed.data);
@@ -269,6 +363,15 @@ tasksRouter.patch("/:id/status", async (req: AuthenticatedRequest, res) => {
   const existingTask = await getTaskById(parsedParams.data.id);
   if (!existingTask) {
     return res.status(404).json({ error: "Task not found" });
+  }
+
+  const canWriteTask = await hasProjectPermission({
+    projectId: existingTask.project_id,
+    userId: req.user.id,
+    permission: "task:write"
+  });
+  if (!canWriteTask) {
+    return res.status(403).json({ error: "Forbidden" });
   }
 
   const result = await transitionTaskStatus({
@@ -312,6 +415,15 @@ tasksRouter.delete("/:id", async (req: AuthenticatedRequest, res) => {
   const existingTask = await getTaskById(parsedParams.data.id);
   if (!existingTask) {
     return res.status(404).json({ error: "Task not found" });
+  }
+
+  const canWriteTask = await hasProjectPermission({
+    projectId: existingTask.project_id,
+    userId: req.user.id,
+    permission: "task:write"
+  });
+  if (!canWriteTask) {
+    return res.status(403).json({ error: "Forbidden" });
   }
 
   const deleted = await deleteTask(parsedParams.data.id);

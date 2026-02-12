@@ -47,6 +47,17 @@ Monorepo scaffold for the Adfix Project Management System.
 - `SEED_PROFILE=admin_only` (default): only admin user
 - `SEED_PROFILE=demo`: admin user + demo client/project/task data
 
+## RBAC
+- Project roles:
+  - `owner`: project creator (implicit)
+  - `manager`, `member`, `viewer`: assigned through project team endpoint
+- Team assignment endpoint accepts only: `manager`, `member`, `viewer`.
+- Permission model (project-scoped):
+  - `viewer`: read-only access
+  - `member`: read + tasks/files write
+  - `manager`: member permissions + project update + team management
+  - `owner`: full permissions including project delete
+
 ## Current Phase
 - Phase 0 foundation scaffolding
 - Initial schema migration in `apps/api/db/migrations/0001_init.sql`

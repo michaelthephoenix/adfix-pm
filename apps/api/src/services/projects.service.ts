@@ -66,13 +66,21 @@ type ProjectTeamRow = {
   user_email: string;
 };
 
-export async function listProjects(filter: ListProjectsFilter) {
+export async function listProjects(filter: ListProjectsFilter, userId: string) {
   const page = filter.page ?? 1;
   const pageSize = filter.pageSize ?? 20;
   const offset = (page - 1) * pageSize;
 
-  const where: string[] = ["p.deleted_at IS NULL"];
-  const values: Array<string> = [];
+  const where: string[] = [
+    "p.deleted_at IS NULL",
+    `(p.created_by = $1 OR EXISTS (
+      SELECT 1
+      FROM project_team pt
+      WHERE pt.project_id = p.id
+        AND pt.user_id = $1
+    ))`
+  ];
+  const values: Array<string> = [userId];
 
   if (filter.clientId) {
     values.push(filter.clientId);

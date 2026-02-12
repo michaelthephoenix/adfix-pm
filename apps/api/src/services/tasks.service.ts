@@ -46,13 +46,25 @@ type TaskTransitionResult =
   | { ok: true; task: TaskRow }
   | { ok: false; reason: "not_found" | "invalid_transition" };
 
-export async function listTasks(filter: ListTasksFilter) {
+export async function listTasks(filter: ListTasksFilter, userId: string) {
   const page = filter.page ?? 1;
   const pageSize = filter.pageSize ?? 20;
   const offset = (page - 1) * pageSize;
 
-  const where: string[] = ["t.deleted_at IS NULL"];
-  const values: Array<string> = [];
+  const where: string[] = [
+    "t.deleted_at IS NULL",
+    `EXISTS (
+      SELECT 1
+      FROM projects p
+      LEFT JOIN project_team pt
+        ON pt.project_id = p.id
+       AND pt.user_id = $1
+      WHERE p.id = t.project_id
+        AND p.deleted_at IS NULL
+        AND (p.created_by = $1 OR pt.user_id IS NOT NULL)
+    )`
+  ];
+  const values: Array<string> = [userId];
 
   if (filter.projectId) {
     values.push(filter.projectId);

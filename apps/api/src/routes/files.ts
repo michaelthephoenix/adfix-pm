@@ -11,6 +11,8 @@ import {
   getFileById,
   listFilesByProjectId
 } from "../services/files.service.js";
+import { getProjectById } from "../services/projects.service.js";
+import { hasProjectPermission } from "../services/rbac.service.js";
 import { sendValidationError } from "../utils/validation.js";
 
 export const filesRouter = Router();
@@ -94,7 +96,11 @@ function buildMockSignedDownloadUrl(objectKey: string, expiresAt: Date) {
 
 filesRouter.use(requireAuth);
 
-filesRouter.get("/project/:projectId", async (req, res) => {
+filesRouter.get("/project/:projectId", async (req: AuthenticatedRequest, res) => {
+  if (!req.user) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
   const parsedParams = projectParamsSchema.safeParse(req.params);
   if (!parsedParams.success) {
     return sendValidationError(res, "Invalid project id", parsedParams.error);
@@ -103,6 +109,20 @@ filesRouter.get("/project/:projectId", async (req, res) => {
   const parsedQuery = fileListQuerySchema.safeParse(req.query);
   if (!parsedQuery.success) {
     return sendValidationError(res, "Invalid files query", parsedQuery.error);
+  }
+
+  const project = await getProjectById(parsedParams.data.projectId);
+  if (!project) {
+    return res.status(404).json({ error: "Project not found" });
+  }
+
+  const canViewProject = await hasProjectPermission({
+    projectId: parsedParams.data.projectId,
+    userId: req.user.id,
+    permission: "project:view"
+  });
+  if (!canViewProject) {
+    return res.status(403).json({ error: "Forbidden" });
   }
 
   const result = await listFilesByProjectId(parsedParams.data.projectId, parsedQuery.data);
@@ -124,6 +144,20 @@ filesRouter.post("/link", async (req: AuthenticatedRequest, res) => {
 
   if (!req.user) {
     return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  const project = await getProjectById(parsed.data.projectId);
+  if (!project) {
+    return res.status(404).json({ error: "Project not found" });
+  }
+
+  const canWriteFile = await hasProjectPermission({
+    projectId: parsed.data.projectId,
+    userId: req.user.id,
+    permission: "file:write"
+  });
+  if (!canWriteFile) {
+    return res.status(403).json({ error: "Forbidden" });
   }
 
   const file = await createLinkedFile({
@@ -151,6 +185,20 @@ filesRouter.post("/upload", async (req: AuthenticatedRequest, res) => {
     return res.status(401).json({ error: "Unauthorized" });
   }
 
+  const project = await getProjectById(parsed.data.projectId);
+  if (!project) {
+    return res.status(404).json({ error: "Project not found" });
+  }
+
+  const canWriteFile = await hasProjectPermission({
+    projectId: parsed.data.projectId,
+    userId: req.user.id,
+    permission: "file:write"
+  });
+  if (!canWriteFile) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+
   const file = await createUploadedFile({
     ...parsed.data,
     uploadedBy: req.user.id
@@ -174,6 +222,20 @@ filesRouter.post("/upload-url", async (req: AuthenticatedRequest, res) => {
 
   if (!req.user) {
     return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  const project = await getProjectById(parsed.data.projectId);
+  if (!project) {
+    return res.status(404).json({ error: "Project not found" });
+  }
+
+  const canWriteFile = await hasProjectPermission({
+    projectId: parsed.data.projectId,
+    userId: req.user.id,
+    permission: "file:write"
+  });
+  if (!canWriteFile) {
+    return res.status(403).json({ error: "Forbidden" });
   }
 
   const objectKey = buildObjectKey(parsed.data.projectId, parsed.data.fileName);
@@ -205,6 +267,20 @@ filesRouter.post("/complete-upload", async (req: AuthenticatedRequest, res) => {
     return res.status(401).json({ error: "Unauthorized" });
   }
 
+  const project = await getProjectById(parsed.data.projectId);
+  if (!project) {
+    return res.status(404).json({ error: "Project not found" });
+  }
+
+  const canWriteFile = await hasProjectPermission({
+    projectId: parsed.data.projectId,
+    userId: req.user.id,
+    permission: "file:write"
+  });
+  if (!canWriteFile) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+
   const file = await createUploadedFile({
     ...parsed.data,
     uploadedBy: req.user.id
@@ -220,7 +296,7 @@ filesRouter.post("/complete-upload", async (req: AuthenticatedRequest, res) => {
   return res.status(201).json({ data: file });
 });
 
-filesRouter.get("/:id/download-url", async (req, res) => {
+filesRouter.get("/:id/download-url", async (req: AuthenticatedRequest, res) => {
   const parsed = fileParamsSchema.safeParse(req.params);
   if (!parsed.success) {
     return sendValidationError(res, "Invalid file id", parsed.error);
@@ -229,6 +305,19 @@ filesRouter.get("/:id/download-url", async (req, res) => {
   const file = await getFileById(parsed.data.id);
   if (!file) {
     return res.status(404).json({ error: "File not found" });
+  }
+
+  if (!req.user) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  const canViewFile = await hasProjectPermission({
+    projectId: file.project_id,
+    userId: req.user.id,
+    permission: "project:view"
+  });
+  if (!canViewFile) {
+    return res.status(403).json({ error: "Forbidden" });
   }
 
   // External linked files are returned directly.
@@ -267,6 +356,15 @@ filesRouter.delete("/:id", async (req: AuthenticatedRequest, res) => {
   const existingFile = await getFileById(parsed.data.id);
   if (!existingFile) {
     return res.status(404).json({ error: "File not found" });
+  }
+
+  const canWriteFile = await hasProjectPermission({
+    projectId: existingFile.project_id,
+    userId: req.user.id,
+    permission: "file:write"
+  });
+  if (!canWriteFile) {
+    return res.status(403).json({ error: "Forbidden" });
   }
 
   const deleted = await deleteFile(parsed.data.id);

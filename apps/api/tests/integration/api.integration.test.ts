@@ -32,9 +32,13 @@ async function resetDatabase() {
 }
 
 async function login(): Promise<LoginResult> {
+  return loginAs(adminUser.email, adminUser.password);
+}
+
+async function loginAs(email: string, password: string): Promise<LoginResult> {
   const response = await request(app).post("/api/auth/login").send({
-    email: adminUser.email,
-    password: adminUser.password
+    email,
+    password
   });
 
   expect(response.status).toBe(200);
@@ -288,7 +292,7 @@ describe("API integration", () => {
     const addTeamMember = await request(app)
       .post(`/api/projects/${projectId}/team`)
       .set("Authorization", `Bearer ${auth.accessToken}`)
-      .send({ userId: secondUserId, role: "Designer" });
+      .send({ userId: secondUserId, role: "member" });
     expect(addTeamMember.status).toBe(201);
 
     const deleteResponse = await request(app)
@@ -305,14 +309,12 @@ describe("API integration", () => {
     const tasksAfterProjectDelete = await request(app)
       .get(`/api/tasks?projectId=${projectId}`)
       .set("Authorization", `Bearer ${auth.accessToken}`);
-    expect(tasksAfterProjectDelete.status).toBe(200);
-    expect(tasksAfterProjectDelete.body.data.length).toBe(0);
+    expect(tasksAfterProjectDelete.status).toBe(404);
 
     const filesAfterProjectDelete = await request(app)
       .get(`/api/files/project/${projectId}`)
       .set("Authorization", `Bearer ${auth.accessToken}`);
-    expect(filesAfterProjectDelete.status).toBe(200);
-    expect(filesAfterProjectDelete.body.data.length).toBe(0);
+    expect(filesAfterProjectDelete.status).toBe(404);
 
     const teamAfterProjectDelete = await request(app)
       .get(`/api/projects/${projectId}/team`)
@@ -876,12 +878,12 @@ describe("API integration", () => {
       .set("Authorization", `Bearer ${auth.accessToken}`)
       .send({
         userId: secondUserId,
-        role: "Designer"
+        role: "member"
       });
 
     expect(addMemberResponse.status).toBe(201);
     expect(addMemberResponse.body.data.user_id).toBe(secondUserId);
-    expect(addMemberResponse.body.data.role).toBe("Designer");
+    expect(addMemberResponse.body.data.role).toBe("member");
 
     const listMembersResponse = await request(app)
       .get(`/api/projects/${projectId}/team`)
@@ -918,6 +920,135 @@ describe("API integration", () => {
       "project_team_member_added",
       "project_team_member_removed"
     ]);
+  });
+
+  it("rbac: viewer can read project resources but cannot mutate", async () => {
+    const ownerAuth = await login();
+
+    const viewerEmail = "viewer@adfix.local";
+    const viewerPassword = "ViewerPass123!";
+    const viewerPasswordHash = await bcrypt.hash(viewerPassword, 12);
+    const viewerInsert = await pool.query<{ id: string }>(
+      `INSERT INTO users (email, name, password_hash, is_active, created_at, updated_at)
+       VALUES ($1, 'Viewer User', $2, TRUE, NOW(), NOW())
+       RETURNING id`,
+      [viewerEmail, viewerPasswordHash]
+    );
+    const viewerId = viewerInsert.rows[0].id;
+
+    const clientResponse = await request(app)
+      .post("/api/clients")
+      .set("Authorization", `Bearer ${ownerAuth.accessToken}`)
+      .send({ name: "RBAC Client" });
+    expect(clientResponse.status).toBe(201);
+    const clientId = clientResponse.body.data.id as string;
+
+    const projectResponse = await request(app)
+      .post("/api/projects")
+      .set("Authorization", `Bearer ${ownerAuth.accessToken}`)
+      .send({
+        clientId,
+        name: "RBAC Project",
+        startDate: "2026-02-12",
+        deadline: "2026-04-05"
+      });
+    expect(projectResponse.status).toBe(201);
+    const projectId = projectResponse.body.data.id as string;
+
+    const taskResponse = await request(app)
+      .post("/api/tasks")
+      .set("Authorization", `Bearer ${ownerAuth.accessToken}`)
+      .send({
+        projectId,
+        title: "Owner Task",
+        phase: "production"
+      });
+    expect(taskResponse.status).toBe(201);
+    const taskId = taskResponse.body.data.id as string;
+
+    const fileResponse = await request(app)
+      .post("/api/files/upload")
+      .set("Authorization", `Bearer ${ownerAuth.accessToken}`)
+      .send({
+        projectId,
+        fileName: "viewer-visible.pdf",
+        fileType: "proposal",
+        storageType: "s3",
+        objectKey: "projects/x/viewer-visible.pdf",
+        mimeType: "application/pdf",
+        fileSize: 1024
+      });
+    expect(fileResponse.status).toBe(201);
+
+    const addViewerResponse = await request(app)
+      .post(`/api/projects/${projectId}/team`)
+      .set("Authorization", `Bearer ${ownerAuth.accessToken}`)
+      .send({
+        userId: viewerId,
+        role: "viewer"
+      });
+    expect(addViewerResponse.status).toBe(201);
+
+    const viewerAuth = await loginAs(viewerEmail, viewerPassword);
+
+    const listProjectsResponse = await request(app)
+      .get("/api/projects")
+      .set("Authorization", `Bearer ${viewerAuth.accessToken}`);
+    expect(listProjectsResponse.status).toBe(200);
+    expect(listProjectsResponse.body.data.length).toBe(1);
+    expect(listProjectsResponse.body.data[0].id).toBe(projectId);
+
+    const getProjectResponse = await request(app)
+      .get(`/api/projects/${projectId}`)
+      .set("Authorization", `Bearer ${viewerAuth.accessToken}`);
+    expect(getProjectResponse.status).toBe(200);
+
+    const listTasksResponse = await request(app)
+      .get(`/api/tasks?projectId=${projectId}`)
+      .set("Authorization", `Bearer ${viewerAuth.accessToken}`);
+    expect(listTasksResponse.status).toBe(200);
+    expect(listTasksResponse.body.data.length).toBe(1);
+
+    const listFilesResponse = await request(app)
+      .get(`/api/files/project/${projectId}`)
+      .set("Authorization", `Bearer ${viewerAuth.accessToken}`);
+    expect(listFilesResponse.status).toBe(200);
+    expect(listFilesResponse.body.data.length).toBe(1);
+
+    const viewerProjectUpdate = await request(app)
+      .put(`/api/projects/${projectId}`)
+      .set("Authorization", `Bearer ${viewerAuth.accessToken}`)
+      .send({ description: "viewer should not update" });
+    expect(viewerProjectUpdate.status).toBe(403);
+
+    const viewerTaskCreate = await request(app)
+      .post("/api/tasks")
+      .set("Authorization", `Bearer ${viewerAuth.accessToken}`)
+      .send({
+        projectId,
+        title: "Viewer cannot create",
+        phase: "production"
+      });
+    expect(viewerTaskCreate.status).toBe(403);
+
+    const viewerTaskDelete = await request(app)
+      .delete(`/api/tasks/${taskId}`)
+      .set("Authorization", `Bearer ${viewerAuth.accessToken}`);
+    expect(viewerTaskDelete.status).toBe(403);
+
+    const viewerFileUpload = await request(app)
+      .post("/api/files/upload")
+      .set("Authorization", `Bearer ${viewerAuth.accessToken}`)
+      .send({
+        projectId,
+        fileName: "viewer-cannot-upload.pdf",
+        fileType: "proposal",
+        storageType: "s3",
+        objectKey: "projects/x/viewer-cannot-upload.pdf",
+        mimeType: "application/pdf",
+        fileSize: 1024
+      });
+    expect(viewerFileUpload.status).toBe(403);
   });
 
   it("search: global and scoped search across projects/tasks/files/clients", async () => {
