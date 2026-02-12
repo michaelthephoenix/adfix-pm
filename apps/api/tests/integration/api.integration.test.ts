@@ -104,6 +104,22 @@ describe("API integration", () => {
 
     expect(refreshA.status).toBe(401);
     expect(refreshB.status).toBe(401);
+
+    const authLogCounts = await pool.query<{ action: string; count: string }>(
+      `SELECT action, COUNT(*)::text AS count
+       FROM activity_log
+       WHERE action IN ('auth_login', 'auth_refresh', 'auth_logout', 'auth_logout_all')
+       GROUP BY action`
+    );
+
+    const counts = Object.fromEntries(
+      authLogCounts.rows.map((row) => [row.action, Number(row.count)])
+    );
+
+    expect(counts.auth_login).toBe(3);
+    expect(counts.auth_refresh).toBe(1);
+    expect(counts.auth_logout).toBe(1);
+    expect(counts.auth_logout_all).toBe(1);
   });
 
   it("clients: CRUD with activity logs", async () => {

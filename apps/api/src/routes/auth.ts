@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
+import { insertActivityLog } from "../services/activity-log.service.js";
 import {
   loginWithEmailPassword,
   refreshAuthToken,
@@ -8,6 +9,7 @@ import {
 } from "../services/auth.service.js";
 import { requireAuth } from "../middleware/auth.js";
 import type { AuthenticatedRequest } from "../types/http.js";
+import { verifyRefreshToken } from "../utils/tokens.js";
 
 export const authRouter = Router();
 
@@ -37,6 +39,17 @@ authRouter.post("/login", async (req, res) => {
     return res.status(401).json({ error: "Invalid email or password" });
   }
 
+  await insertActivityLog({
+    userId: result.user.id,
+    action: "auth_login",
+    details: {
+      email: result.user.email,
+      userAgent: req.header("user-agent") ?? null,
+      ipAddress: req.ip
+    },
+    projectId: null
+  });
+
   return res.status(200).json(result);
 });
 
@@ -56,6 +69,16 @@ authRouter.post("/refresh", async (req, res) => {
     return res.status(401).json({ error: "Invalid refresh token" });
   }
 
+  await insertActivityLog({
+    userId: result.user.id,
+    action: "auth_refresh",
+    details: {
+      userAgent: req.header("user-agent") ?? null,
+      ipAddress: req.ip
+    },
+    projectId: null
+  });
+
   return res.status(200).json(result);
 });
 
@@ -66,7 +89,23 @@ authRouter.post("/logout", async (req, res) => {
   }
 
   try {
+    const decoded = verifyRefreshToken(parsed.data.refreshToken);
+    if (decoded.tokenType !== "refresh") {
+      return res.status(401).json({ error: "Invalid refresh token" });
+    }
+
     await revokeSessionByRefreshToken(parsed.data.refreshToken);
+
+    await insertActivityLog({
+      userId: decoded.userId,
+      action: "auth_logout",
+      details: {
+        sessionId: decoded.sessionId,
+        userAgent: req.header("user-agent") ?? null,
+        ipAddress: req.ip
+      },
+      projectId: null
+    });
   } catch {
     return res.status(401).json({ error: "Invalid refresh token" });
   }
@@ -81,7 +120,22 @@ authRouter.post("/logout-all", async (req, res) => {
   }
 
   try {
+    const decoded = verifyRefreshToken(parsed.data.refreshToken);
+    if (decoded.tokenType !== "refresh") {
+      return res.status(401).json({ error: "Invalid refresh token" });
+    }
+
     await revokeAllUserSessionsByRefreshToken(parsed.data.refreshToken);
+
+    await insertActivityLog({
+      userId: decoded.userId,
+      action: "auth_logout_all",
+      details: {
+        userAgent: req.header("user-agent") ?? null,
+        ipAddress: req.ip
+      },
+      projectId: null
+    });
   } catch {
     return res.status(401).json({ error: "Invalid refresh token" });
   }
