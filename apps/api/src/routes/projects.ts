@@ -33,7 +33,9 @@ const listProjectsQuerySchema = z.object({
   phase: projectPhaseEnum.optional(),
   priority: priorityEnum.optional(),
   deadlineFrom: isoDateSchema.optional(),
-  deadlineTo: isoDateSchema.optional()
+  deadlineTo: isoDateSchema.optional(),
+  page: z.coerce.number().int().min(1).optional().default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).optional().default(20)
 });
 
 const projectCreateSchema = z.object({
@@ -78,8 +80,15 @@ projectsRouter.get("/", async (req, res) => {
     return res.status(400).json({ error: "Invalid projects query" });
   }
 
-  const projects = await listProjects(parsed.data);
-  return res.status(200).json({ data: projects });
+  const result = await listProjects(parsed.data);
+  return res.status(200).json({
+    data: result.rows,
+    meta: {
+      page: parsed.data.page,
+      pageSize: parsed.data.pageSize,
+      total: result.total
+    }
+  });
 });
 
 projectsRouter.get("/:id", async (req, res) => {

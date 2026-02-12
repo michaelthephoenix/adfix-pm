@@ -21,6 +21,8 @@ type ListProjectsFilter = {
   priority?: ProjectRow["priority"];
   deadlineFrom?: string;
   deadlineTo?: string;
+  page?: number;
+  pageSize?: number;
 };
 
 const PHASE_FLOW: Array<ProjectRow["current_phase"]> = [
@@ -65,6 +67,10 @@ type ProjectTeamRow = {
 };
 
 export async function listProjects(filter: ListProjectsFilter) {
+  const page = filter.page ?? 1;
+  const pageSize = filter.pageSize ?? 20;
+  const offset = (page - 1) * pageSize;
+
   const where: string[] = ["p.deleted_at IS NULL"];
   const values: Array<string> = [];
 
@@ -89,7 +95,7 @@ export async function listProjects(filter: ListProjectsFilter) {
     where.push(`p.deadline <= $${values.length}::date`);
   }
 
-  const query = `
+  const dataQuery = `
     SELECT
       p.id,
       p.client_id,
@@ -108,10 +114,26 @@ export async function listProjects(filter: ListProjectsFilter) {
     INNER JOIN clients c ON c.id = p.client_id AND c.deleted_at IS NULL
     WHERE ${where.join(" AND ")}
     ORDER BY p.created_at DESC
+    LIMIT $${values.length + 1}
+    OFFSET $${values.length + 2}
   `;
 
-  const result = await pool.query<ProjectRow & { client_name: string }>(query, values);
-  return result.rows;
+  const countQuery = `
+    SELECT COUNT(*)::text AS total
+    FROM projects p
+    INNER JOIN clients c ON c.id = p.client_id AND c.deleted_at IS NULL
+    WHERE ${where.join(" AND ")}
+  `;
+
+  const [dataResult, countResult] = await Promise.all([
+    pool.query<ProjectRow & { client_name: string }>(dataQuery, [...values, pageSize.toString(), offset.toString()]),
+    pool.query<{ total: string }>(countQuery, values)
+  ]);
+
+  return {
+    rows: dataResult.rows,
+    total: Number(countResult.rows[0]?.total ?? 0)
+  };
 }
 
 export async function getProjectById(projectId: string) {

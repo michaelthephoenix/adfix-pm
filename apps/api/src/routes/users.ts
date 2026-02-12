@@ -10,6 +10,11 @@ const idParamsSchema = z.object({
   id: z.string().uuid()
 });
 
+const usersListQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).optional().default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).optional().default(20)
+});
+
 const userUpdateSchema = z
   .object({
     name: z.string().trim().min(1).max(255).optional(),
@@ -21,9 +26,21 @@ const userUpdateSchema = z
 
 usersRouter.use(requireAuth);
 
-usersRouter.get("/", async (_req, res) => {
-  const users = await listUsers();
-  return res.status(200).json({ data: users });
+usersRouter.get("/", async (req, res) => {
+  const parsedQuery = usersListQuerySchema.safeParse(req.query);
+  if (!parsedQuery.success) {
+    return res.status(400).json({ error: "Invalid users query" });
+  }
+
+  const result = await listUsers(parsedQuery.data);
+  return res.status(200).json({
+    data: result.rows,
+    meta: {
+      page: parsedQuery.data.page,
+      pageSize: parsedQuery.data.pageSize,
+      total: result.total
+    }
+  });
 });
 
 usersRouter.get("/:id", async (req, res) => {
@@ -66,4 +83,3 @@ usersRouter.put("/:id", async (req: AuthenticatedRequest, res) => {
 
   return res.status(200).json({ data: user });
 });
-

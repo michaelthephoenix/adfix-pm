@@ -28,30 +28,47 @@ type FileRow = {
   created_at: Date;
 };
 
-export async function listFilesByProjectId(projectId: string) {
-  const result = await pool.query<FileRow>(
-    `SELECT
-       id,
-       project_id,
-       file_name,
-       file_type,
-       storage_type,
-       object_key,
-       external_url,
-       mime_type,
-       file_size::text,
-       checksum_sha256,
-       uploaded_by,
-       version,
-       created_at
-     FROM files
-     WHERE project_id = $1
-       AND deleted_at IS NULL
-     ORDER BY created_at DESC`,
-    [projectId]
-  );
+export async function listFilesByProjectId(projectId: string, input?: { page?: number; pageSize?: number }) {
+  const page = input?.page ?? 1;
+  const pageSize = input?.pageSize ?? 20;
+  const offset = (page - 1) * pageSize;
 
-  return result.rows;
+  const [dataResult, countResult] = await Promise.all([
+    pool.query<FileRow>(
+      `SELECT
+         id,
+         project_id,
+         file_name,
+         file_type,
+         storage_type,
+         object_key,
+         external_url,
+         mime_type,
+         file_size::text,
+         checksum_sha256,
+         uploaded_by,
+         version,
+         created_at
+       FROM files
+       WHERE project_id = $1
+         AND deleted_at IS NULL
+       ORDER BY created_at DESC
+       LIMIT $2 OFFSET $3`,
+      [projectId, pageSize, offset]
+    ),
+    pool.query<{ total: string }>(
+      `SELECT COUNT(*)::text AS total
+       FROM files
+       WHERE project_id = $1
+         AND deleted_at IS NULL`,
+      [projectId]
+    )
+  ]);
+
+  return {
+    rows: dataResult.rows,
+    total: Number(countResult.rows[0]?.total ?? 0)
+  };
 }
 
 export async function getFileById(fileId: string) {
@@ -185,4 +202,3 @@ export async function deleteFile(fileId: string) {
 
   return result.rowCount === 1;
 }
-

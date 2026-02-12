@@ -32,6 +32,11 @@ const projectParamsSchema = z.object({
   projectId: z.string().uuid()
 });
 
+const fileListQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).optional().default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).optional().default(20)
+});
+
 const fileParamsSchema = z.object({
   id: z.string().uuid()
 });
@@ -89,13 +94,25 @@ function buildMockSignedDownloadUrl(objectKey: string, expiresAt: Date) {
 filesRouter.use(requireAuth);
 
 filesRouter.get("/project/:projectId", async (req, res) => {
-  const parsed = projectParamsSchema.safeParse(req.params);
-  if (!parsed.success) {
+  const parsedParams = projectParamsSchema.safeParse(req.params);
+  if (!parsedParams.success) {
     return res.status(400).json({ error: "Invalid project id" });
   }
 
-  const files = await listFilesByProjectId(parsed.data.projectId);
-  return res.status(200).json({ data: files });
+  const parsedQuery = fileListQuerySchema.safeParse(req.query);
+  if (!parsedQuery.success) {
+    return res.status(400).json({ error: "Invalid files query" });
+  }
+
+  const result = await listFilesByProjectId(parsedParams.data.projectId, parsedQuery.data);
+  return res.status(200).json({
+    data: result.rows,
+    meta: {
+      page: parsedQuery.data.page,
+      pageSize: parsedQuery.data.pageSize,
+      total: result.total
+    }
+  });
 });
 
 filesRouter.post("/link", async (req: AuthenticatedRequest, res) => {

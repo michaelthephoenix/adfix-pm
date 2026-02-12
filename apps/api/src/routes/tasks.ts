@@ -31,7 +31,9 @@ const listTasksQuerySchema = z.object({
   assignedTo: z.string().uuid().optional(),
   status: taskStatusEnum.optional(),
   phase: projectPhaseEnum.optional(),
-  overdue: z.coerce.boolean().optional()
+  overdue: z.coerce.boolean().optional(),
+  page: z.coerce.number().int().min(1).optional().default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).optional().default(20)
 });
 
 const taskCreateSchema = z.object({
@@ -66,8 +68,15 @@ tasksRouter.get("/", async (req, res) => {
     return res.status(400).json({ error: "Invalid tasks query" });
   }
 
-  const tasks = await listTasks(parsed.data);
-  return res.status(200).json({ data: tasks });
+  const result = await listTasks(parsed.data);
+  return res.status(200).json({
+    data: result.rows,
+    meta: {
+      page: parsed.data.page,
+      pageSize: parsed.data.pageSize,
+      total: result.total
+    }
+  });
 });
 
 tasksRouter.get("/:id", async (req, res) => {
@@ -216,4 +225,3 @@ tasksRouter.delete("/:id", async (req: AuthenticatedRequest, res) => {
 
   return res.status(204).send();
 });
-

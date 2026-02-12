@@ -11,15 +11,31 @@ type ClientRow = {
   updated_at: Date;
 };
 
-export async function listClients() {
-  const result = await pool.query<ClientRow>(
-    `SELECT id, name, company, email, phone, notes, created_at, updated_at
-     FROM clients
-     WHERE deleted_at IS NULL
-     ORDER BY created_at DESC`
-  );
+export async function listClients(input?: { page?: number; pageSize?: number }) {
+  const page = input?.page ?? 1;
+  const pageSize = input?.pageSize ?? 20;
+  const offset = (page - 1) * pageSize;
 
-  return result.rows;
+  const [dataResult, countResult] = await Promise.all([
+    pool.query<ClientRow>(
+      `SELECT id, name, company, email, phone, notes, created_at, updated_at
+       FROM clients
+       WHERE deleted_at IS NULL
+       ORDER BY created_at DESC
+       LIMIT $1 OFFSET $2`,
+      [pageSize, offset]
+    ),
+    pool.query<{ total: string }>(
+      `SELECT COUNT(*)::text AS total
+       FROM clients
+       WHERE deleted_at IS NULL`
+    )
+  ]);
+
+  return {
+    rows: dataResult.rows,
+    total: Number(countResult.rows[0]?.total ?? 0)
+  };
 }
 
 export async function getClientById(clientId: string) {
@@ -119,4 +135,3 @@ export async function deleteClient(clientId: string) {
 
   return result.rowCount === 1;
 }
-

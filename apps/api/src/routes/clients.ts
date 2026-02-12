@@ -27,11 +27,28 @@ const idParamsSchema = z.object({
   id: z.string().uuid()
 });
 
+const clientsListQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).optional().default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).optional().default(20)
+});
+
 clientsRouter.use(requireAuth);
 
-clientsRouter.get("/", async (_req, res) => {
-  const clients = await listClients();
-  return res.status(200).json({ data: clients });
+clientsRouter.get("/", async (req, res) => {
+  const parsedQuery = clientsListQuerySchema.safeParse(req.query);
+  if (!parsedQuery.success) {
+    return res.status(400).json({ error: "Invalid clients query" });
+  }
+
+  const result = await listClients(parsedQuery.data);
+  return res.status(200).json({
+    data: result.rows,
+    meta: {
+      page: parsedQuery.data.page,
+      pageSize: parsedQuery.data.pageSize,
+      total: result.total
+    }
+  });
 });
 
 clientsRouter.get("/:id", async (req, res) => {

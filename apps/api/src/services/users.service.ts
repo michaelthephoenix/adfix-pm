@@ -11,23 +11,39 @@ type UserRow = {
   updated_at: Date;
 };
 
-export async function listUsers() {
-  const result = await pool.query<UserRow>(
-    `SELECT
-       id,
-       email,
-       name,
-       avatar_url,
-       is_active,
-       last_login_at,
-       created_at,
-       updated_at
-     FROM users
-     WHERE deleted_at IS NULL
-     ORDER BY created_at ASC`
-  );
+export async function listUsers(input?: { page?: number; pageSize?: number }) {
+  const page = input?.page ?? 1;
+  const pageSize = input?.pageSize ?? 20;
+  const offset = (page - 1) * pageSize;
 
-  return result.rows;
+  const [dataResult, countResult] = await Promise.all([
+    pool.query<UserRow>(
+      `SELECT
+         id,
+         email,
+         name,
+         avatar_url,
+         is_active,
+         last_login_at,
+         created_at,
+         updated_at
+       FROM users
+       WHERE deleted_at IS NULL
+       ORDER BY created_at ASC
+       LIMIT $1 OFFSET $2`,
+      [pageSize, offset]
+    ),
+    pool.query<{ total: string }>(
+      `SELECT COUNT(*)::text AS total
+       FROM users
+       WHERE deleted_at IS NULL`
+    )
+  ]);
+
+  return {
+    rows: dataResult.rows,
+    total: Number(countResult.rows[0]?.total ?? 0)
+  };
 }
 
 export async function getUserById(userId: string) {
@@ -95,4 +111,3 @@ export async function updateUserProfile(
 
   return result.rows[0] ?? null;
 }
-

@@ -31,6 +31,8 @@ type ListTasksFilter = {
   status?: TaskStatus;
   phase?: ProjectPhase;
   overdue?: boolean;
+  page?: number;
+  pageSize?: number;
 };
 
 const TASK_STATUS_TRANSITIONS: Record<TaskStatus, TaskStatus[]> = {
@@ -45,6 +47,10 @@ type TaskTransitionResult =
   | { ok: false; reason: "not_found" | "invalid_transition" };
 
 export async function listTasks(filter: ListTasksFilter) {
+  const page = filter.page ?? 1;
+  const pageSize = filter.pageSize ?? 20;
+  const offset = (page - 1) * pageSize;
+
   const where: string[] = ["t.deleted_at IS NULL"];
   const values: Array<string> = [];
 
@@ -73,8 +79,7 @@ export async function listTasks(filter: ListTasksFilter) {
     );
   }
 
-  const result = await pool.query<TaskRow>(
-    `SELECT
+  const dataQuery = `SELECT
        t.id,
        t.project_id,
        t.title,
@@ -90,11 +95,23 @@ export async function listTasks(filter: ListTasksFilter) {
        t.updated_at
      FROM tasks t
      WHERE ${where.join(" AND ")}
-     ORDER BY t.created_at DESC`,
-    values
-  );
+     ORDER BY t.created_at DESC
+     LIMIT $${values.length + 1}
+     OFFSET $${values.length + 2}`;
 
-  return result.rows;
+  const countQuery = `SELECT COUNT(*)::text AS total
+     FROM tasks t
+     WHERE ${where.join(" AND ")}`;
+
+  const [dataResult, countResult] = await Promise.all([
+    pool.query<TaskRow>(dataQuery, [...values, pageSize.toString(), offset.toString()]),
+    pool.query<{ total: string }>(countQuery, values)
+  ]);
+
+  return {
+    rows: dataResult.rows,
+    total: Number(countResult.rows[0]?.total ?? 0)
+  };
 }
 
 export async function getTaskById(taskId: string) {
