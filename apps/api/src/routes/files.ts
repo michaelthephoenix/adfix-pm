@@ -13,6 +13,7 @@ import {
 } from "../services/files.service.js";
 import { getProjectById } from "../services/projects.service.js";
 import { hasProjectPermission } from "../services/rbac.service.js";
+import { logAndSendForbidden } from "../utils/authz.js";
 import { sendValidationError } from "../utils/validation.js";
 
 export const filesRouter = Router();
@@ -122,7 +123,12 @@ filesRouter.get("/project/:projectId", async (req: AuthenticatedRequest, res) =>
     permission: "project:view"
   });
   if (!canViewProject) {
-    return res.status(403).json({ error: "Forbidden" });
+    return logAndSendForbidden({
+      req,
+      res,
+      permission: "project:view",
+      projectId: parsedParams.data.projectId
+    });
   }
 
   const result = await listFilesByProjectId(parsedParams.data.projectId, parsedQuery.data);
@@ -157,7 +163,12 @@ filesRouter.post("/link", async (req: AuthenticatedRequest, res) => {
     permission: "file:write"
   });
   if (!canWriteFile) {
-    return res.status(403).json({ error: "Forbidden" });
+    return logAndSendForbidden({
+      req,
+      res,
+      permission: "file:write",
+      projectId: parsed.data.projectId
+    });
   }
 
   const file = await createLinkedFile({
@@ -196,7 +207,12 @@ filesRouter.post("/upload", async (req: AuthenticatedRequest, res) => {
     permission: "file:write"
   });
   if (!canWriteFile) {
-    return res.status(403).json({ error: "Forbidden" });
+    return logAndSendForbidden({
+      req,
+      res,
+      permission: "file:write",
+      projectId: parsed.data.projectId
+    });
   }
 
   const file = await createUploadedFile({
@@ -235,7 +251,12 @@ filesRouter.post("/upload-url", async (req: AuthenticatedRequest, res) => {
     permission: "file:write"
   });
   if (!canWriteFile) {
-    return res.status(403).json({ error: "Forbidden" });
+    return logAndSendForbidden({
+      req,
+      res,
+      permission: "file:write",
+      projectId: parsed.data.projectId
+    });
   }
 
   const objectKey = buildObjectKey(parsed.data.projectId, parsed.data.fileName);
@@ -278,7 +299,12 @@ filesRouter.post("/complete-upload", async (req: AuthenticatedRequest, res) => {
     permission: "file:write"
   });
   if (!canWriteFile) {
-    return res.status(403).json({ error: "Forbidden" });
+    return logAndSendForbidden({
+      req,
+      res,
+      permission: "file:write",
+      projectId: parsed.data.projectId
+    });
   }
 
   const file = await createUploadedFile({
@@ -317,7 +343,12 @@ filesRouter.get("/:id/download-url", async (req: AuthenticatedRequest, res) => {
     permission: "project:view"
   });
   if (!canViewFile) {
-    return res.status(403).json({ error: "Forbidden" });
+    return logAndSendForbidden({
+      req,
+      res,
+      permission: "project:view",
+      projectId: file.project_id
+    });
   }
 
   // External linked files are returned directly.
@@ -364,7 +395,12 @@ filesRouter.delete("/:id", async (req: AuthenticatedRequest, res) => {
     permission: "file:write"
   });
   if (!canWriteFile) {
-    return res.status(403).json({ error: "Forbidden" });
+    return logAndSendForbidden({
+      req,
+      res,
+      permission: "file:write",
+      projectId: existingFile.project_id
+    });
   }
 
   const deleted = await deleteFile(parsed.data.id);

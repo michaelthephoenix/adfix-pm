@@ -15,6 +15,7 @@ import {
 } from "../services/tasks.service.js";
 import { getProjectById } from "../services/projects.service.js";
 import { hasProjectPermission } from "../services/rbac.service.js";
+import { logAndSendForbidden } from "../utils/authz.js";
 import { sendValidationError } from "../utils/validation.js";
 
 export const tasksRouter = Router();
@@ -101,7 +102,12 @@ tasksRouter.get("/", async (req: AuthenticatedRequest, res) => {
       permission: "project:view"
     });
     if (!canViewProject) {
-      return res.status(403).json({ error: "Forbidden" });
+      return logAndSendForbidden({
+        req,
+        res,
+        permission: "project:view",
+        projectId: parsed.data.projectId
+      });
     }
   }
 
@@ -138,7 +144,12 @@ tasksRouter.post("/bulk/status", async (req: AuthenticatedRequest, res) => {
       permission: "task:write"
     });
     if (!canWriteTask) {
-      return res.status(403).json({ error: "Forbidden" });
+      return logAndSendForbidden({
+        req,
+        res,
+        permission: "task:write",
+        projectId: task.project_id
+      });
     }
   }
 
@@ -205,7 +216,12 @@ tasksRouter.post("/bulk/delete", async (req: AuthenticatedRequest, res) => {
       permission: "task:write"
     });
     if (!canWriteTask) {
-      return res.status(403).json({ error: "Forbidden" });
+      return logAndSendForbidden({
+        req,
+        res,
+        permission: "task:write",
+        projectId: task.project_id
+      });
     }
   }
 
@@ -256,7 +272,12 @@ tasksRouter.get("/:id", async (req: AuthenticatedRequest, res) => {
     permission: "project:view"
   });
   if (!canViewTask) {
-    return res.status(403).json({ error: "Forbidden" });
+    return logAndSendForbidden({
+      req,
+      res,
+      permission: "project:view",
+      projectId: task.project_id
+    });
   }
 
   return res.status(200).json({ data: task });
@@ -283,7 +304,12 @@ tasksRouter.post("/", async (req: AuthenticatedRequest, res) => {
     permission: "task:write"
   });
   if (!canWriteTask) {
-    return res.status(403).json({ error: "Forbidden" });
+    return logAndSendForbidden({
+      req,
+      res,
+      permission: "task:write",
+      projectId: parsed.data.projectId
+    });
   }
 
   const task = await createTask({
@@ -327,7 +353,12 @@ tasksRouter.put("/:id", async (req: AuthenticatedRequest, res) => {
     permission: "task:write"
   });
   if (!canWriteTask) {
-    return res.status(403).json({ error: "Forbidden" });
+    return logAndSendForbidden({
+      req,
+      res,
+      permission: "task:write",
+      projectId: existingTask.project_id
+    });
   }
 
   const task = await updateTask(parsedParams.data.id, parsed.data);
@@ -371,7 +402,12 @@ tasksRouter.patch("/:id/status", async (req: AuthenticatedRequest, res) => {
     permission: "task:write"
   });
   if (!canWriteTask) {
-    return res.status(403).json({ error: "Forbidden" });
+    return logAndSendForbidden({
+      req,
+      res,
+      permission: "task:write",
+      projectId: existingTask.project_id
+    });
   }
 
   const result = await transitionTaskStatus({
@@ -423,7 +459,12 @@ tasksRouter.delete("/:id", async (req: AuthenticatedRequest, res) => {
     permission: "task:write"
   });
   if (!canWriteTask) {
-    return res.status(403).json({ error: "Forbidden" });
+    return logAndSendForbidden({
+      req,
+      res,
+      permission: "task:write",
+      projectId: existingTask.project_id
+    });
   }
 
   const deleted = await deleteTask(parsedParams.data.id);

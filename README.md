@@ -58,6 +58,7 @@ Monorepo scaffold for the Adfix Project Management System.
   - `manager`: member permissions + project update + team management
   - `owner`: full permissions including project delete
 - `search` and `analytics` responses are scoped to projects the requester can access.
+- RBAC denials are audit-logged as `authz_denied` in `activity_log`.
 
 ## Current Phase
 - Phase 0 foundation scaffolding

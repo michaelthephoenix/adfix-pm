@@ -1049,6 +1049,15 @@ describe("API integration", () => {
         fileSize: 1024
       });
     expect(viewerFileUpload.status).toBe(403);
+
+    const authzDeniedLogs = await pool.query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count
+       FROM activity_log
+       WHERE action = 'authz_denied'
+         AND project_id = $1`,
+      [projectId]
+    );
+    expect(Number(authzDeniedLogs.rows[0].count)).toBeGreaterThanOrEqual(4);
   });
 
   it("search: global and scoped search across projects/tasks/files/clients", async () => {

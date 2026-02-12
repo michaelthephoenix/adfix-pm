@@ -16,6 +16,7 @@ import {
   updateProject
 } from "../services/projects.service.js";
 import { hasProjectPermission } from "../services/rbac.service.js";
+import { logAndSendForbidden } from "../utils/authz.js";
 import { sendValidationError } from "../utils/validation.js";
 
 export const projectsRouter = Router();
@@ -119,7 +120,12 @@ projectsRouter.get("/:id", async (req: AuthenticatedRequest, res) => {
     permission: "project:view"
   });
   if (!canView) {
-    return res.status(403).json({ error: "Forbidden" });
+    return logAndSendForbidden({
+      req,
+      res,
+      permission: "project:view",
+      projectId: parsedParams.data.id
+    });
   }
 
   return res.status(200).json({ data: project });
@@ -146,7 +152,12 @@ projectsRouter.get("/:id/activity", async (req: AuthenticatedRequest, res) => {
     permission: "project:view"
   });
   if (!canView) {
-    return res.status(403).json({ error: "Forbidden" });
+    return logAndSendForbidden({
+      req,
+      res,
+      permission: "project:view",
+      projectId: parsedParams.data.id
+    });
   }
 
   const activity = await listProjectActivity(parsedParams.data.id);
@@ -174,7 +185,12 @@ projectsRouter.get("/:id/team", async (req: AuthenticatedRequest, res) => {
     permission: "project:view"
   });
   if (!canView) {
-    return res.status(403).json({ error: "Forbidden" });
+    return logAndSendForbidden({
+      req,
+      res,
+      permission: "project:view",
+      projectId: parsedParams.data.id
+    });
   }
 
   const members = await listProjectTeamMembers(parsedParams.data.id);
@@ -207,7 +223,12 @@ projectsRouter.post("/:id/team", async (req: AuthenticatedRequest, res) => {
     permission: "team:manage"
   });
   if (!canManageTeam) {
-    return res.status(403).json({ error: "Forbidden" });
+    return logAndSendForbidden({
+      req,
+      res,
+      permission: "team:manage",
+      projectId: parsedParams.data.id
+    });
   }
 
   const result = await addProjectTeamMember({
@@ -258,7 +279,12 @@ projectsRouter.delete("/:id/team/:userId", async (req: AuthenticatedRequest, res
     permission: "team:manage"
   });
   if (!canManageTeam) {
-    return res.status(403).json({ error: "Forbidden" });
+    return logAndSendForbidden({
+      req,
+      res,
+      permission: "team:manage",
+      projectId: parsedParams.data.id
+    });
   }
 
   const deleted = await removeProjectTeamMember(parsedParams.data.id, parsedParams.data.userId);
@@ -333,7 +359,12 @@ projectsRouter.put("/:id", async (req: AuthenticatedRequest, res) => {
     permission: "project:update"
   });
   if (!canUpdateProject) {
-    return res.status(403).json({ error: "Forbidden" });
+    return logAndSendForbidden({
+      req,
+      res,
+      permission: "project:update",
+      projectId: parsedParams.data.id
+    });
   }
 
   const project = await updateProject(parsedParams.data.id, parsed.data);
@@ -377,7 +408,12 @@ projectsRouter.patch("/:id/phase", async (req: AuthenticatedRequest, res) => {
     permission: "project:update"
   });
   if (!canUpdateProject) {
-    return res.status(403).json({ error: "Forbidden" });
+    return logAndSendForbidden({
+      req,
+      res,
+      permission: "project:update",
+      projectId: parsedParams.data.id
+    });
   }
 
   const result = await transitionProjectPhase({
@@ -419,7 +455,12 @@ projectsRouter.delete("/:id", async (req: AuthenticatedRequest, res) => {
     permission: "project:delete"
   });
   if (!canDeleteProject) {
-    return res.status(403).json({ error: "Forbidden" });
+    return logAndSendForbidden({
+      req,
+      res,
+      permission: "project:delete",
+      projectId: parsedParams.data.id
+    });
   }
 
   const deleted = await deleteProject(parsedParams.data.id, req.user.id);
