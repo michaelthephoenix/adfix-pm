@@ -1,4 +1,5 @@
 import { Router } from "express";
+import crypto from "node:crypto";
 import { z } from "zod";
 import { requireAuth } from "../middleware/auth.js";
 import type { AuthenticatedRequest } from "../types/http.js";
@@ -55,6 +56,35 @@ const uploadFileSchema = z.object({
   fileSize: z.coerce.number().int().positive(),
   checksumSha256: z.string().regex(/^[a-fA-F0-9]{64}$/).optional().nullable()
 });
+
+const uploadUrlRequestSchema = z.object({
+  projectId: z.string().uuid(),
+  fileName: z.string().trim().min(1).max(255),
+  fileType: fileTypeEnum,
+  storageType: uploadStorageTypeEnum,
+  mimeType: z.string().trim().min(1).max(127),
+  fileSize: z.coerce.number().int().positive()
+});
+
+const completeUploadSchema = uploadUrlRequestSchema.extend({
+  objectKey: z.string().trim().min(1).max(2048),
+  checksumSha256: z.string().regex(/^[a-fA-F0-9]{64}$/).optional().nullable()
+});
+
+function buildObjectKey(projectId: string, fileName: string) {
+  const safeName = fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
+  return `projects/${projectId}/uploads/${Date.now()}-${safeName}`;
+}
+
+function buildMockSignedUploadUrl(objectKey: string, expiresAt: Date) {
+  const token = crypto.randomBytes(16).toString("hex");
+  return `https://uploads.adfix.local/mock-put/${encodeURIComponent(objectKey)}?token=${token}&expires=${expiresAt.toISOString()}`;
+}
+
+function buildMockSignedDownloadUrl(objectKey: string, expiresAt: Date) {
+  const token = crypto.randomBytes(16).toString("hex");
+  return `https://downloads.adfix.local/mock-get/${encodeURIComponent(objectKey)}?token=${token}&expires=${expiresAt.toISOString()}`;
+}
 
 filesRouter.use(requireAuth);
 
@@ -118,6 +148,94 @@ filesRouter.post("/upload", async (req: AuthenticatedRequest, res) => {
   return res.status(201).json({ data: file });
 });
 
+filesRouter.post("/upload-url", async (req: AuthenticatedRequest, res) => {
+  const parsed = uploadUrlRequestSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid upload-url payload" });
+  }
+
+  if (!req.user) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  const objectKey = buildObjectKey(parsed.data.projectId, parsed.data.fileName);
+  const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+  const uploadUrl = buildMockSignedUploadUrl(objectKey, expiresAt);
+
+  return res.status(200).json({
+    data: {
+      projectId: parsed.data.projectId,
+      fileName: parsed.data.fileName,
+      fileType: parsed.data.fileType,
+      storageType: parsed.data.storageType,
+      mimeType: parsed.data.mimeType,
+      fileSize: parsed.data.fileSize,
+      objectKey,
+      uploadUrl,
+      expiresAt: expiresAt.toISOString()
+    }
+  });
+});
+
+filesRouter.post("/complete-upload", async (req: AuthenticatedRequest, res) => {
+  const parsed = completeUploadSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid complete-upload payload" });
+  }
+
+  if (!req.user) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  const file = await createUploadedFile({
+    ...parsed.data,
+    uploadedBy: req.user.id
+  });
+
+  await insertActivityLog({
+    userId: req.user.id,
+    projectId: file.project_id,
+    action: "file_uploaded",
+    details: { fileId: file.id, objectKey: file.object_key, storageType: file.storage_type }
+  });
+
+  return res.status(201).json({ data: file });
+});
+
+filesRouter.get("/:id/download-url", async (req, res) => {
+  const parsed = fileParamsSchema.safeParse(req.params);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid file id" });
+  }
+
+  const file = await getFileById(parsed.data.id);
+  if (!file) {
+    return res.status(404).json({ error: "File not found" });
+  }
+
+  // External linked files are returned directly.
+  if (file.external_url) {
+    return res.status(200).json({
+      data: {
+        fileId: file.id,
+        downloadUrl: file.external_url,
+        expiresAt: null
+      }
+    });
+  }
+
+  const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+  const downloadUrl = buildMockSignedDownloadUrl(file.object_key, expiresAt);
+
+  return res.status(200).json({
+    data: {
+      fileId: file.id,
+      downloadUrl,
+      expiresAt: expiresAt.toISOString()
+    }
+  });
+});
+
 filesRouter.delete("/:id", async (req: AuthenticatedRequest, res) => {
   const parsed = fileParamsSchema.safeParse(req.params);
   if (!parsed.success) {
@@ -147,4 +265,3 @@ filesRouter.delete("/:id", async (req: AuthenticatedRequest, res) => {
 
   return res.status(204).send();
 });
-

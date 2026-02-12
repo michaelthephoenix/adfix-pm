@@ -487,6 +487,72 @@ describe("API integration", () => {
     expect(counts.file_deleted).toBe(1);
   });
 
+  it("files: upload-url + complete-upload + download-url flow", async () => {
+    const auth = await login();
+
+    const clientResponse = await request(app)
+      .post("/api/clients")
+      .set("Authorization", `Bearer ${auth.accessToken}`)
+      .send({ name: "Upload URL Client" });
+
+    expect(clientResponse.status).toBe(201);
+    const clientId = clientResponse.body.data.id as string;
+
+    const projectResponse = await request(app)
+      .post("/api/projects")
+      .set("Authorization", `Bearer ${auth.accessToken}`)
+      .send({
+        clientId,
+        name: "Upload URL Project",
+        startDate: "2026-02-12",
+        deadline: "2026-04-15"
+      });
+
+    expect(projectResponse.status).toBe(201);
+    const projectId = projectResponse.body.data.id as string;
+
+    const uploadUrlResponse = await request(app)
+      .post("/api/files/upload-url")
+      .set("Authorization", `Bearer ${auth.accessToken}`)
+      .send({
+        projectId,
+        fileName: "deck.pdf",
+        fileType: "proposal",
+        storageType: "s3",
+        mimeType: "application/pdf",
+        fileSize: 4096
+      });
+
+    expect(uploadUrlResponse.status).toBe(200);
+    expect(uploadUrlResponse.body.data.uploadUrl).toContain("uploads.adfix.local");
+    expect(uploadUrlResponse.body.data.objectKey).toContain(`projects/${projectId}/uploads/`);
+
+    const completeUploadResponse = await request(app)
+      .post("/api/files/complete-upload")
+      .set("Authorization", `Bearer ${auth.accessToken}`)
+      .send({
+        projectId,
+        fileName: "deck.pdf",
+        fileType: "proposal",
+        storageType: "s3",
+        mimeType: "application/pdf",
+        fileSize: 4096,
+        objectKey: uploadUrlResponse.body.data.objectKey,
+        checksumSha256: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      });
+
+    expect(completeUploadResponse.status).toBe(201);
+    const fileId = completeUploadResponse.body.data.id as string;
+
+    const downloadUrlResponse = await request(app)
+      .get(`/api/files/${fileId}/download-url`)
+      .set("Authorization", `Bearer ${auth.accessToken}`);
+
+    expect(downloadUrlResponse.status).toBe(200);
+    expect(downloadUrlResponse.body.data.downloadUrl).toContain("downloads.adfix.local");
+    expect(downloadUrlResponse.body.data.fileId).toBe(fileId);
+  });
+
   it("project activity endpoint + analytics endpoints", async () => {
     const auth = await login();
 
