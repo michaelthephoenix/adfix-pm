@@ -31,6 +31,14 @@ const PHASE_FLOW: Array<ProjectRow["current_phase"]> = [
   "delivery"
 ];
 
+const PHASE_DEFAULT_TASK_TITLES: Record<ProjectRow["current_phase"], string[]> = {
+  client_acquisition: ["Confirm client requirements", "Collect intake documents"],
+  strategy_planning: ["Create project strategy", "Draft creative brief", "Approve production scope"],
+  production: ["Produce core assets", "Internal quality check", "Prepare draft delivery"],
+  post_production: ["Collect feedback", "Apply final revisions", "Finalize master files"],
+  delivery: ["Package deliverables", "Deliver to client", "Close project handoff"]
+};
+
 type TransitionResult =
   | { ok: true; project: ProjectRow & { client_name: string } }
   | { ok: false; reason: "not_found" | "invalid_transition" };
@@ -359,6 +367,38 @@ export async function transitionProjectPhase(input: {
          start_date, deadline, created_by, created_at, updated_at`,
       [input.nextPhase, input.projectId]
     );
+
+    // Create default tasks for the next phase, skipping titles that already exist (idempotent behavior).
+    const templateTitles = PHASE_DEFAULT_TASK_TITLES[input.nextPhase] ?? [];
+    if (templateTitles.length > 0) {
+      const existingTaskRows = await client.query<{ title: string }>(
+        `SELECT title
+         FROM tasks
+         WHERE project_id = $1
+           AND phase = $2
+           AND deleted_at IS NULL`,
+        [input.projectId, input.nextPhase]
+      );
+
+      const existingTitles = new Set(existingTaskRows.rows.map((row) => row.title.trim().toLowerCase()));
+      const missingTitles = templateTitles.filter(
+        (title) => !existingTitles.has(title.trim().toLowerCase())
+      );
+
+      for (const title of missingTitles) {
+        await client.query(
+          `INSERT INTO tasks (
+             project_id, title, description, phase, status, priority, assigned_to,
+             due_date, completed_at, created_by, created_at, updated_at
+           )
+           VALUES (
+             $1, $2, NULL, $3, 'pending', 'medium', NULL,
+             NULL, NULL, $4, NOW(), NOW()
+           )`,
+          [input.projectId, title, input.nextPhase, input.userId]
+        );
+      }
+    }
 
     await client.query(
       `INSERT INTO activity_log (project_id, user_id, action, details, created_at)

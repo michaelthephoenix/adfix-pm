@@ -201,6 +201,13 @@ describe("API integration", () => {
     expect(validPhaseTransition.status).toBe(200);
     expect(validPhaseTransition.body.data.current_phase).toBe("strategy_planning");
 
+    const phaseTasks = await request(app)
+      .get(`/api/tasks?projectId=${projectId}&phase=strategy_planning`)
+      .set("Authorization", `Bearer ${auth.accessToken}`);
+
+    expect(phaseTasks.status).toBe(200);
+    expect(phaseTasks.body.data.length).toBe(3);
+
     const backwardTransition = await request(app)
       .patch(`/api/projects/${projectId}/phase`)
       .set("Authorization", `Bearer ${auth.accessToken}`)
