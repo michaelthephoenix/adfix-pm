@@ -584,4 +584,58 @@ describe("API integration", () => {
     expect(timelineAnalyticsResponse.body.data.length).toBeGreaterThan(0);
     expect(timelineAnalyticsResponse.body.data[0]).toHaveProperty("daysRemaining");
   });
+
+  it("users: list, get, update own profile, block updating others", async () => {
+    const auth = await login();
+
+    const meResponse = await request(app)
+      .get("/api/auth/me")
+      .set("Authorization", `Bearer ${auth.accessToken}`);
+
+    expect(meResponse.status).toBe(200);
+    const meId = meResponse.body.user.id as string;
+
+    const secondUserPasswordHash = await bcrypt.hash("AnotherPass123!", 12);
+    const secondUserInsert = await pool.query<{ id: string }>(
+      `INSERT INTO users (email, name, password_hash, is_active, created_at, updated_at)
+       VALUES ('designer@adfix.local', 'Designer User', $1, TRUE, NOW(), NOW())
+       RETURNING id`,
+      [secondUserPasswordHash]
+    );
+    const secondUserId = secondUserInsert.rows[0].id;
+
+    const listResponse = await request(app)
+      .get("/api/users")
+      .set("Authorization", `Bearer ${auth.accessToken}`);
+
+    expect(listResponse.status).toBe(200);
+    expect(Array.isArray(listResponse.body.data)).toBe(true);
+    expect(listResponse.body.data.length).toBe(2);
+
+    const getResponse = await request(app)
+      .get(`/api/users/${meId}`)
+      .set("Authorization", `Bearer ${auth.accessToken}`);
+
+    expect(getResponse.status).toBe(200);
+    expect(getResponse.body.data.id).toBe(meId);
+
+    const updateSelfResponse = await request(app)
+      .put(`/api/users/${meId}`)
+      .set("Authorization", `Bearer ${auth.accessToken}`)
+      .send({
+        name: "Adfix Admin Updated",
+        avatarUrl: "https://cdn.example.com/avatar.png"
+      });
+
+    expect(updateSelfResponse.status).toBe(200);
+    expect(updateSelfResponse.body.data.name).toBe("Adfix Admin Updated");
+    expect(updateSelfResponse.body.data.avatar_url).toBe("https://cdn.example.com/avatar.png");
+
+    const updateOtherResponse = await request(app)
+      .put(`/api/users/${secondUserId}`)
+      .set("Authorization", `Bearer ${auth.accessToken}`)
+      .send({ name: "Should Not Work" });
+
+    expect(updateOtherResponse.status).toBe(403);
+  });
 });
