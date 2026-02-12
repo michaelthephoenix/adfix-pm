@@ -486,4 +486,102 @@ describe("API integration", () => {
     expect(counts.file_linked).toBe(1);
     expect(counts.file_deleted).toBe(1);
   });
+
+  it("project activity endpoint + analytics endpoints", async () => {
+    const auth = await login();
+
+    const clientResponse = await request(app)
+      .post("/api/clients")
+      .set("Authorization", `Bearer ${auth.accessToken}`)
+      .send({ name: "Analytics Client" });
+
+    expect(clientResponse.status).toBe(201);
+    const clientId = clientResponse.body.data.id as string;
+
+    const projectResponse = await request(app)
+      .post("/api/projects")
+      .set("Authorization", `Bearer ${auth.accessToken}`)
+      .send({
+        clientId,
+        name: "Analytics Project",
+        startDate: "2026-02-12",
+        deadline: "2026-03-31"
+      });
+
+    expect(projectResponse.status).toBe(201);
+    const projectId = projectResponse.body.data.id as string;
+
+    const taskResponse = await request(app)
+      .post("/api/tasks")
+      .set("Authorization", `Bearer ${auth.accessToken}`)
+      .send({
+        projectId,
+        title: "Analytics Task",
+        phase: "production",
+        dueDate: "2020-01-01"
+      });
+
+    expect(taskResponse.status).toBe(201);
+    const taskId = taskResponse.body.data.id as string;
+
+    const taskMove = await request(app)
+      .patch(`/api/tasks/${taskId}/status`)
+      .set("Authorization", `Bearer ${auth.accessToken}`)
+      .send({ status: "in_progress" });
+
+    expect(taskMove.status).toBe(200);
+
+    const projectPhaseMove = await request(app)
+      .patch(`/api/projects/${projectId}/phase`)
+      .set("Authorization", `Bearer ${auth.accessToken}`)
+      .send({ phase: "strategy_planning", reason: "progress update" });
+
+    expect(projectPhaseMove.status).toBe(200);
+
+    const activityResponse = await request(app)
+      .get(`/api/projects/${projectId}/activity`)
+      .set("Authorization", `Bearer ${auth.accessToken}`);
+
+    expect(activityResponse.status).toBe(200);
+    expect(Array.isArray(activityResponse.body.data)).toBe(true);
+    expect(activityResponse.body.data.length).toBeGreaterThan(0);
+    expect(activityResponse.body.data[0]).toHaveProperty("action");
+    expect(activityResponse.body.data[0]).toHaveProperty("details");
+
+    const dashboardResponse = await request(app)
+      .get("/api/analytics/dashboard")
+      .set("Authorization", `Bearer ${auth.accessToken}`);
+
+    expect(dashboardResponse.status).toBe(200);
+    expect(dashboardResponse.body.data).toHaveProperty("projectsByPhase");
+    expect(dashboardResponse.body.data).toHaveProperty("overdueTasksCount");
+    expect(dashboardResponse.body.data.overdueTasksCount).toBeGreaterThanOrEqual(0);
+
+    const projectsAnalyticsResponse = await request(app)
+      .get("/api/analytics/projects")
+      .set("Authorization", `Bearer ${auth.accessToken}`);
+
+    expect(projectsAnalyticsResponse.status).toBe(200);
+    expect(Array.isArray(projectsAnalyticsResponse.body.data)).toBe(true);
+    expect(projectsAnalyticsResponse.body.data.length).toBeGreaterThan(0);
+    expect(projectsAnalyticsResponse.body.data[0]).toHaveProperty("completionRatePct");
+
+    const teamAnalyticsResponse = await request(app)
+      .get("/api/analytics/team")
+      .set("Authorization", `Bearer ${auth.accessToken}`);
+
+    expect(teamAnalyticsResponse.status).toBe(200);
+    expect(Array.isArray(teamAnalyticsResponse.body.data)).toBe(true);
+    expect(teamAnalyticsResponse.body.data.length).toBeGreaterThan(0);
+    expect(teamAnalyticsResponse.body.data[0]).toHaveProperty("totalTasks");
+
+    const timelineAnalyticsResponse = await request(app)
+      .get("/api/analytics/timeline")
+      .set("Authorization", `Bearer ${auth.accessToken}`);
+
+    expect(timelineAnalyticsResponse.status).toBe(200);
+    expect(Array.isArray(timelineAnalyticsResponse.body.data)).toBe(true);
+    expect(timelineAnalyticsResponse.body.data.length).toBeGreaterThan(0);
+    expect(timelineAnalyticsResponse.body.data[0]).toHaveProperty("daysRemaining");
+  });
 });

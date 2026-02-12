@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { requireAuth } from "../middleware/auth.js";
 import type { AuthenticatedRequest } from "../types/http.js";
-import { insertActivityLog } from "../services/activity-log.service.js";
+import { insertActivityLog, listProjectActivity } from "../services/activity-log.service.js";
 import {
   createProject,
   deleteProject,
@@ -81,6 +81,21 @@ projectsRouter.get("/:id", async (req, res) => {
   }
 
   return res.status(200).json({ data: project });
+});
+
+projectsRouter.get("/:id/activity", async (req, res) => {
+  const parsedParams = idParamsSchema.safeParse(req.params);
+  if (!parsedParams.success) {
+    return res.status(400).json({ error: "Invalid project id" });
+  }
+
+  const project = await getProjectDetailById(parsedParams.data.id);
+  if (!project) {
+    return res.status(404).json({ error: "Project not found" });
+  }
+
+  const activity = await listProjectActivity(parsedParams.data.id);
+  return res.status(200).json({ data: activity });
 });
 
 projectsRouter.post("/", async (req: AuthenticatedRequest, res) => {

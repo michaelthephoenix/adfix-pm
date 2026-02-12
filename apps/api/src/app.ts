@@ -7,6 +7,7 @@ import { clientsRouter } from "./routes/clients.js";
 import { projectsRouter } from "./routes/projects.js";
 import { tasksRouter } from "./routes/tasks.js";
 import { filesRouter } from "./routes/files.js";
+import { analyticsRouter } from "./routes/analytics.js";
 import { errorHandler, notFoundHandler } from "./middleware/errors.js";
 
 export function createApp() {
@@ -24,6 +25,7 @@ export function createApp() {
   app.use("/api/projects", projectsRouter);
   app.use("/api/tasks", tasksRouter);
   app.use("/api/files", filesRouter);
+  app.use("/api/analytics", analyticsRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);
