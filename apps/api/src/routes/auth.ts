@@ -10,6 +10,7 @@ import {
 import { requireAuth } from "../middleware/auth.js";
 import type { AuthenticatedRequest } from "../types/http.js";
 import { verifyRefreshToken } from "../utils/tokens.js";
+import { sendValidationError } from "../utils/validation.js";
 
 export const authRouter = Router();
 
@@ -25,7 +26,7 @@ const refreshSchema = z.object({
 authRouter.post("/login", async (req, res) => {
   const parsed = loginSchema.safeParse(req.body);
   if (!parsed.success) {
-    return res.status(400).json({ error: "Invalid login payload" });
+    return sendValidationError(res, "Invalid login payload", parsed.error);
   }
 
   const result = await loginWithEmailPassword({
@@ -56,7 +57,7 @@ authRouter.post("/login", async (req, res) => {
 authRouter.post("/refresh", async (req, res) => {
   const parsed = refreshSchema.safeParse(req.body);
   if (!parsed.success) {
-    return res.status(400).json({ error: "Invalid refresh payload" });
+    return sendValidationError(res, "Invalid refresh payload", parsed.error);
   }
 
   const result = await refreshAuthToken({
@@ -85,7 +86,7 @@ authRouter.post("/refresh", async (req, res) => {
 authRouter.post("/logout", async (req, res) => {
   const parsed = refreshSchema.safeParse(req.body);
   if (!parsed.success) {
-    return res.status(400).json({ error: "Invalid logout payload" });
+    return sendValidationError(res, "Invalid logout payload", parsed.error);
   }
 
   try {
@@ -116,7 +117,7 @@ authRouter.post("/logout", async (req, res) => {
 authRouter.post("/logout-all", async (req, res) => {
   const parsed = refreshSchema.safeParse(req.body);
   if (!parsed.success) {
-    return res.status(400).json({ error: "Invalid logout payload" });
+    return sendValidationError(res, "Invalid logout payload", parsed.error);
   }
 
   try {

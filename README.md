@@ -22,6 +22,7 @@ Monorepo scaffold for the Adfix Project Management System.
 ## Useful Commands
 - `npm run db:migrate`: apply pending SQL migrations from `apps/api/db/migrations`
 - `npm run db:seed`: upsert the default admin user
+- `npm run db:seed:demo`: seed admin + demo client/project/tasks
 - `npm run typecheck`: run TypeScript checks for API + scripts
 - `npm run test:api`: run integration tests (auth, clients, projects, phase transitions, activity logs)
 - `npm run test:api:coverage`: run integration tests with coverage thresholds
@@ -30,6 +31,21 @@ Monorepo scaffold for the Adfix Project Management System.
 - Auth routes (`/api/auth/*`): `AUTH_RATE_LIMIT_MAX` per `AUTH_RATE_LIMIT_WINDOW_MS`
 - Protected API routes: `API_RATE_LIMIT_MAX` per `API_RATE_LIMIT_WINDOW_MS`
 - In `NODE_ENV=test`, rate limiting is skipped so tests remain deterministic.
+
+## API Docs + Observability
+- OpenAPI spec endpoint: `GET /api/docs.json`
+- Docs landing page: `GET /api/docs`
+- Health endpoint now includes database status: `GET /api/health`
+- Every response includes `x-request-id` for tracing.
+
+## Validation Error Shape
+- Request validation failures return:
+  - `error`: concise message
+  - `details`: Zod `flatten()` output (`formErrors`, `fieldErrors`)
+
+## Seed Profiles
+- `SEED_PROFILE=admin_only` (default): only admin user
+- `SEED_PROFILE=demo`: admin user + demo client/project/task data
 
 ## Current Phase
 - Phase 0 foundation scaffolding

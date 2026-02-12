@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireAuth } from "../middleware/auth.js";
 import type { AuthenticatedRequest } from "../types/http.js";
 import { getUserById, listUsers, updateUserProfile } from "../services/users.service.js";
+import { sendValidationError } from "../utils/validation.js";
 
 export const usersRouter = Router();
 
@@ -29,7 +30,7 @@ usersRouter.use(requireAuth);
 usersRouter.get("/", async (req, res) => {
   const parsedQuery = usersListQuerySchema.safeParse(req.query);
   if (!parsedQuery.success) {
-    return res.status(400).json({ error: "Invalid users query" });
+    return sendValidationError(res, "Invalid users query", parsedQuery.error);
   }
 
   const result = await listUsers(parsedQuery.data);
@@ -46,7 +47,7 @@ usersRouter.get("/", async (req, res) => {
 usersRouter.get("/:id", async (req, res) => {
   const parsedParams = idParamsSchema.safeParse(req.params);
   if (!parsedParams.success) {
-    return res.status(400).json({ error: "Invalid user id" });
+    return sendValidationError(res, "Invalid user id", parsedParams.error);
   }
 
   const user = await getUserById(parsedParams.data.id);
@@ -60,12 +61,12 @@ usersRouter.get("/:id", async (req, res) => {
 usersRouter.put("/:id", async (req: AuthenticatedRequest, res) => {
   const parsedParams = idParamsSchema.safeParse(req.params);
   if (!parsedParams.success) {
-    return res.status(400).json({ error: "Invalid user id" });
+    return sendValidationError(res, "Invalid user id", parsedParams.error);
   }
 
   const parsedBody = userUpdateSchema.safeParse(req.body);
   if (!parsedBody.success) {
-    return res.status(400).json({ error: "Invalid user payload" });
+    return sendValidationError(res, "Invalid user payload", parsedBody.error);
   }
 
   if (!req.user) {

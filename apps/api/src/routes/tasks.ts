@@ -13,6 +13,7 @@ import {
   transitionTaskStatus,
   updateTask
 } from "../services/tasks.service.js";
+import { sendValidationError } from "../utils/validation.js";
 
 export const tasksRouter = Router();
 
@@ -79,7 +80,7 @@ tasksRouter.use(requireAuth);
 tasksRouter.get("/", async (req, res) => {
   const parsed = listTasksQuerySchema.safeParse(req.query);
   if (!parsed.success) {
-    return res.status(400).json({ error: "Invalid tasks query" });
+    return sendValidationError(res, "Invalid tasks query", parsed.error);
   }
 
   const result = await listTasks(parsed.data);
@@ -96,7 +97,7 @@ tasksRouter.get("/", async (req, res) => {
 tasksRouter.post("/bulk/status", async (req: AuthenticatedRequest, res) => {
   const parsed = bulkStatusPatchSchema.safeParse(req.body);
   if (!parsed.success) {
-    return res.status(400).json({ error: "Invalid bulk status payload" });
+    return sendValidationError(res, "Invalid bulk status payload", parsed.error);
   }
 
   if (!req.user) {
@@ -147,7 +148,7 @@ tasksRouter.post("/bulk/status", async (req: AuthenticatedRequest, res) => {
 tasksRouter.post("/bulk/delete", async (req: AuthenticatedRequest, res) => {
   const parsed = bulkDeleteSchema.safeParse(req.body);
   if (!parsed.success) {
-    return res.status(400).json({ error: "Invalid bulk delete payload" });
+    return sendValidationError(res, "Invalid bulk delete payload", parsed.error);
   }
 
   if (!req.user) {
@@ -184,7 +185,7 @@ tasksRouter.post("/bulk/delete", async (req: AuthenticatedRequest, res) => {
 tasksRouter.get("/:id", async (req, res) => {
   const parsedParams = idParamsSchema.safeParse(req.params);
   if (!parsedParams.success) {
-    return res.status(400).json({ error: "Invalid task id" });
+    return sendValidationError(res, "Invalid task id", parsedParams.error);
   }
 
   const task = await getTaskById(parsedParams.data.id);
@@ -198,7 +199,7 @@ tasksRouter.get("/:id", async (req, res) => {
 tasksRouter.post("/", async (req: AuthenticatedRequest, res) => {
   const parsed = taskCreateSchema.safeParse(req.body);
   if (!parsed.success) {
-    return res.status(400).json({ error: "Invalid task payload" });
+    return sendValidationError(res, "Invalid task payload", parsed.error);
   }
 
   if (!req.user) {
@@ -223,12 +224,12 @@ tasksRouter.post("/", async (req: AuthenticatedRequest, res) => {
 tasksRouter.put("/:id", async (req: AuthenticatedRequest, res) => {
   const parsedParams = idParamsSchema.safeParse(req.params);
   if (!parsedParams.success) {
-    return res.status(400).json({ error: "Invalid task id" });
+    return sendValidationError(res, "Invalid task id", parsedParams.error);
   }
 
   const parsed = taskUpdateSchema.safeParse(req.body);
   if (!parsed.success) {
-    return res.status(400).json({ error: "Invalid task payload" });
+    return sendValidationError(res, "Invalid task payload", parsed.error);
   }
 
   if (!req.user) {
@@ -253,12 +254,12 @@ tasksRouter.put("/:id", async (req: AuthenticatedRequest, res) => {
 tasksRouter.patch("/:id/status", async (req: AuthenticatedRequest, res) => {
   const parsedParams = idParamsSchema.safeParse(req.params);
   if (!parsedParams.success) {
-    return res.status(400).json({ error: "Invalid task id" });
+    return sendValidationError(res, "Invalid task id", parsedParams.error);
   }
 
   const parsed = taskStatusPatchSchema.safeParse(req.body);
   if (!parsed.success) {
-    return res.status(400).json({ error: "Invalid status payload" });
+    return sendValidationError(res, "Invalid status payload", parsed.error);
   }
 
   if (!req.user) {
@@ -301,7 +302,7 @@ tasksRouter.patch("/:id/status", async (req: AuthenticatedRequest, res) => {
 tasksRouter.delete("/:id", async (req: AuthenticatedRequest, res) => {
   const parsedParams = idParamsSchema.safeParse(req.params);
   if (!parsedParams.success) {
-    return res.status(400).json({ error: "Invalid task id" });
+    return sendValidationError(res, "Invalid task id", parsedParams.error);
   }
 
   if (!req.user) {

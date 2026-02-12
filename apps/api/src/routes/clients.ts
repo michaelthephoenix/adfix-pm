@@ -10,6 +10,7 @@ import {
   listClients,
   updateClient
 } from "../services/clients.service.js";
+import { sendValidationError } from "../utils/validation.js";
 
 export const clientsRouter = Router();
 
@@ -37,7 +38,7 @@ clientsRouter.use(requireAuth);
 clientsRouter.get("/", async (req, res) => {
   const parsedQuery = clientsListQuerySchema.safeParse(req.query);
   if (!parsedQuery.success) {
-    return res.status(400).json({ error: "Invalid clients query" });
+    return sendValidationError(res, "Invalid clients query", parsedQuery.error);
   }
 
   const result = await listClients(parsedQuery.data);
@@ -54,7 +55,7 @@ clientsRouter.get("/", async (req, res) => {
 clientsRouter.get("/:id", async (req, res) => {
   const parsedParams = idParamsSchema.safeParse(req.params);
   if (!parsedParams.success) {
-    return res.status(400).json({ error: "Invalid client id" });
+    return sendValidationError(res, "Invalid client id", parsedParams.error);
   }
 
   const client = await getClientById(parsedParams.data.id);
@@ -68,7 +69,7 @@ clientsRouter.get("/:id", async (req, res) => {
 clientsRouter.post("/", async (req: AuthenticatedRequest, res) => {
   const parsed = clientCreateSchema.safeParse(req.body);
   if (!parsed.success) {
-    return res.status(400).json({ error: "Invalid client payload" });
+    return sendValidationError(res, "Invalid client payload", parsed.error);
   }
 
   if (!req.user) {
@@ -89,12 +90,12 @@ clientsRouter.post("/", async (req: AuthenticatedRequest, res) => {
 clientsRouter.put("/:id", async (req: AuthenticatedRequest, res) => {
   const parsedParams = idParamsSchema.safeParse(req.params);
   if (!parsedParams.success) {
-    return res.status(400).json({ error: "Invalid client id" });
+    return sendValidationError(res, "Invalid client id", parsedParams.error);
   }
 
   const parsed = clientUpdateSchema.safeParse(req.body);
   if (!parsed.success) {
-    return res.status(400).json({ error: "Invalid client payload" });
+    return sendValidationError(res, "Invalid client payload", parsed.error);
   }
 
   if (!req.user) {
@@ -119,7 +120,7 @@ clientsRouter.put("/:id", async (req: AuthenticatedRequest, res) => {
 clientsRouter.delete("/:id", async (req: AuthenticatedRequest, res) => {
   const parsedParams = idParamsSchema.safeParse(req.params);
   if (!parsedParams.success) {
-    return res.status(400).json({ error: "Invalid client id" });
+    return sendValidationError(res, "Invalid client id", parsedParams.error);
   }
 
   if (!req.user) {

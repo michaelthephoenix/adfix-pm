@@ -11,6 +11,7 @@ import {
   getFileById,
   listFilesByProjectId
 } from "../services/files.service.js";
+import { sendValidationError } from "../utils/validation.js";
 
 export const filesRouter = Router();
 
@@ -96,12 +97,12 @@ filesRouter.use(requireAuth);
 filesRouter.get("/project/:projectId", async (req, res) => {
   const parsedParams = projectParamsSchema.safeParse(req.params);
   if (!parsedParams.success) {
-    return res.status(400).json({ error: "Invalid project id" });
+    return sendValidationError(res, "Invalid project id", parsedParams.error);
   }
 
   const parsedQuery = fileListQuerySchema.safeParse(req.query);
   if (!parsedQuery.success) {
-    return res.status(400).json({ error: "Invalid files query" });
+    return sendValidationError(res, "Invalid files query", parsedQuery.error);
   }
 
   const result = await listFilesByProjectId(parsedParams.data.projectId, parsedQuery.data);
@@ -118,7 +119,7 @@ filesRouter.get("/project/:projectId", async (req, res) => {
 filesRouter.post("/link", async (req: AuthenticatedRequest, res) => {
   const parsed = linkFileSchema.safeParse(req.body);
   if (!parsed.success) {
-    return res.status(400).json({ error: "Invalid file link payload" });
+    return sendValidationError(res, "Invalid file link payload", parsed.error);
   }
 
   if (!req.user) {
@@ -143,7 +144,7 @@ filesRouter.post("/link", async (req: AuthenticatedRequest, res) => {
 filesRouter.post("/upload", async (req: AuthenticatedRequest, res) => {
   const parsed = uploadFileSchema.safeParse(req.body);
   if (!parsed.success) {
-    return res.status(400).json({ error: "Invalid file upload payload" });
+    return sendValidationError(res, "Invalid file upload payload", parsed.error);
   }
 
   if (!req.user) {
@@ -168,7 +169,7 @@ filesRouter.post("/upload", async (req: AuthenticatedRequest, res) => {
 filesRouter.post("/upload-url", async (req: AuthenticatedRequest, res) => {
   const parsed = uploadUrlRequestSchema.safeParse(req.body);
   if (!parsed.success) {
-    return res.status(400).json({ error: "Invalid upload-url payload" });
+    return sendValidationError(res, "Invalid upload-url payload", parsed.error);
   }
 
   if (!req.user) {
@@ -197,7 +198,7 @@ filesRouter.post("/upload-url", async (req: AuthenticatedRequest, res) => {
 filesRouter.post("/complete-upload", async (req: AuthenticatedRequest, res) => {
   const parsed = completeUploadSchema.safeParse(req.body);
   if (!parsed.success) {
-    return res.status(400).json({ error: "Invalid complete-upload payload" });
+    return sendValidationError(res, "Invalid complete-upload payload", parsed.error);
   }
 
   if (!req.user) {
@@ -222,7 +223,7 @@ filesRouter.post("/complete-upload", async (req: AuthenticatedRequest, res) => {
 filesRouter.get("/:id/download-url", async (req, res) => {
   const parsed = fileParamsSchema.safeParse(req.params);
   if (!parsed.success) {
-    return res.status(400).json({ error: "Invalid file id" });
+    return sendValidationError(res, "Invalid file id", parsed.error);
   }
 
   const file = await getFileById(parsed.data.id);
@@ -256,7 +257,7 @@ filesRouter.get("/:id/download-url", async (req, res) => {
 filesRouter.delete("/:id", async (req: AuthenticatedRequest, res) => {
   const parsed = fileParamsSchema.safeParse(req.params);
   if (!parsed.success) {
-    return res.status(400).json({ error: "Invalid file id" });
+    return sendValidationError(res, "Invalid file id", parsed.error);
   }
 
   if (!req.user) {

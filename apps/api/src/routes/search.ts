@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { requireAuth } from "../middleware/auth.js";
 import { runSearch } from "../services/search.service.js";
+import { sendValidationError } from "../utils/validation.js";
 
 export const searchRouter = Router();
 
@@ -16,7 +17,7 @@ searchRouter.use(requireAuth);
 searchRouter.get("/", async (req, res) => {
   const parsed = searchQuerySchema.safeParse(req.query);
   if (!parsed.success) {
-    return res.status(400).json({ error: "Invalid search query" });
+    return sendValidationError(res, "Invalid search query", parsed.error);
   }
 
   const data = await runSearch({
@@ -27,4 +28,3 @@ searchRouter.get("/", async (req, res) => {
 
   return res.status(200).json({ data });
 });
-

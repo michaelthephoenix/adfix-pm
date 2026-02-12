@@ -56,6 +56,20 @@ afterAll(async () => {
 });
 
 describe("API integration", () => {
+  it("public: health + docs expose service metadata and request id", async () => {
+    const healthResponse = await request(app).get("/api/health");
+    expect(healthResponse.status).toBe(200);
+    expect(healthResponse.body.status).toBe("ok");
+    expect(healthResponse.body.checks.database).toBe("ok");
+    expect(healthResponse.body).toHaveProperty("timestamp");
+    expect(healthResponse.headers["x-request-id"]).toBeTypeOf("string");
+
+    const docsResponse = await request(app).get("/api/docs.json");
+    expect(docsResponse.status).toBe(200);
+    expect(docsResponse.body.openapi).toBe("3.0.3");
+    expect(docsResponse.body.info.title).toBe("Adfix PM API");
+  });
+
   it("auth: login, me, refresh, logout, logout-all", async () => {
     const firstLogin = await login();
 
@@ -807,6 +821,15 @@ describe("API integration", () => {
       .send({ name: "Should Not Work" });
 
     expect(updateOtherResponse.status).toBe(403);
+
+    const invalidPayloadResponse = await request(app)
+      .put(`/api/users/${meId}`)
+      .set("Authorization", `Bearer ${auth.accessToken}`)
+      .send({ avatarUrl: "not-a-url" });
+
+    expect(invalidPayloadResponse.status).toBe(400);
+    expect(invalidPayloadResponse.body.error).toBe("Invalid user payload");
+    expect(invalidPayloadResponse.body.details).toHaveProperty("fieldErrors");
   });
 
   it("project team: add/list/remove members with activity logs", async () => {

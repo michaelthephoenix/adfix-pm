@@ -14,6 +14,7 @@ import {
   transitionProjectPhase,
   updateProject
 } from "../services/projects.service.js";
+import { sendValidationError } from "../utils/validation.js";
 
 export const projectsRouter = Router();
 
@@ -77,7 +78,7 @@ projectsRouter.use(requireAuth);
 projectsRouter.get("/", async (req, res) => {
   const parsed = listProjectsQuerySchema.safeParse(req.query);
   if (!parsed.success) {
-    return res.status(400).json({ error: "Invalid projects query" });
+    return sendValidationError(res, "Invalid projects query", parsed.error);
   }
 
   const result = await listProjects(parsed.data);
@@ -94,7 +95,7 @@ projectsRouter.get("/", async (req, res) => {
 projectsRouter.get("/:id", async (req, res) => {
   const parsedParams = idParamsSchema.safeParse(req.params);
   if (!parsedParams.success) {
-    return res.status(400).json({ error: "Invalid project id" });
+    return sendValidationError(res, "Invalid project id", parsedParams.error);
   }
 
   const project = await getProjectDetailById(parsedParams.data.id);
@@ -108,7 +109,7 @@ projectsRouter.get("/:id", async (req, res) => {
 projectsRouter.get("/:id/activity", async (req, res) => {
   const parsedParams = idParamsSchema.safeParse(req.params);
   if (!parsedParams.success) {
-    return res.status(400).json({ error: "Invalid project id" });
+    return sendValidationError(res, "Invalid project id", parsedParams.error);
   }
 
   const project = await getProjectDetailById(parsedParams.data.id);
@@ -123,7 +124,7 @@ projectsRouter.get("/:id/activity", async (req, res) => {
 projectsRouter.get("/:id/team", async (req, res) => {
   const parsedParams = idParamsSchema.safeParse(req.params);
   if (!parsedParams.success) {
-    return res.status(400).json({ error: "Invalid project id" });
+    return sendValidationError(res, "Invalid project id", parsedParams.error);
   }
 
   const project = await getProjectDetailById(parsedParams.data.id);
@@ -138,12 +139,12 @@ projectsRouter.get("/:id/team", async (req, res) => {
 projectsRouter.post("/:id/team", async (req: AuthenticatedRequest, res) => {
   const parsedParams = idParamsSchema.safeParse(req.params);
   if (!parsedParams.success) {
-    return res.status(400).json({ error: "Invalid project id" });
+    return sendValidationError(res, "Invalid project id", parsedParams.error);
   }
 
   const parsedBody = projectTeamAddSchema.safeParse(req.body);
   if (!parsedBody.success) {
-    return res.status(400).json({ error: "Invalid team payload" });
+    return sendValidationError(res, "Invalid team payload", parsedBody.error);
   }
 
   if (!req.user) {
@@ -180,7 +181,7 @@ projectsRouter.post("/:id/team", async (req: AuthenticatedRequest, res) => {
 projectsRouter.delete("/:id/team/:userId", async (req: AuthenticatedRequest, res) => {
   const parsedParams = projectTeamParamsSchema.safeParse(req.params);
   if (!parsedParams.success) {
-    return res.status(400).json({ error: "Invalid project or user id" });
+    return sendValidationError(res, "Invalid project or user id", parsedParams.error);
   }
 
   if (!req.user) {
@@ -207,7 +208,7 @@ projectsRouter.delete("/:id/team/:userId", async (req: AuthenticatedRequest, res
 projectsRouter.post("/", async (req: AuthenticatedRequest, res) => {
   const parsed = projectCreateSchema.safeParse(req.body);
   if (!parsed.success) {
-    return res.status(400).json({ error: "Invalid project payload" });
+    return sendValidationError(res, "Invalid project payload", parsed.error);
   }
 
   if (!req.user) {
@@ -236,12 +237,12 @@ projectsRouter.post("/", async (req: AuthenticatedRequest, res) => {
 projectsRouter.put("/:id", async (req: AuthenticatedRequest, res) => {
   const parsedParams = idParamsSchema.safeParse(req.params);
   if (!parsedParams.success) {
-    return res.status(400).json({ error: "Invalid project id" });
+    return sendValidationError(res, "Invalid project id", parsedParams.error);
   }
 
   const parsed = projectUpdateSchema.safeParse(req.body);
   if (!parsed.success) {
-    return res.status(400).json({ error: "Invalid project payload" });
+    return sendValidationError(res, "Invalid project payload", parsed.error);
   }
 
   if (!req.user) {
@@ -266,12 +267,12 @@ projectsRouter.put("/:id", async (req: AuthenticatedRequest, res) => {
 projectsRouter.patch("/:id/phase", async (req: AuthenticatedRequest, res) => {
   const parsedParams = idParamsSchema.safeParse(req.params);
   if (!parsedParams.success) {
-    return res.status(400).json({ error: "Invalid project id" });
+    return sendValidationError(res, "Invalid project id", parsedParams.error);
   }
 
   const parsed = projectPhasePatchSchema.safeParse(req.body);
   if (!parsed.success) {
-    return res.status(400).json({ error: "Invalid phase payload" });
+    return sendValidationError(res, "Invalid phase payload", parsed.error);
   }
 
   if (!req.user) {
@@ -299,7 +300,7 @@ projectsRouter.patch("/:id/phase", async (req: AuthenticatedRequest, res) => {
 projectsRouter.delete("/:id", async (req: AuthenticatedRequest, res) => {
   const parsedParams = idParamsSchema.safeParse(req.params);
   if (!parsedParams.success) {
-    return res.status(400).json({ error: "Invalid project id" });
+    return sendValidationError(res, "Invalid project id", parsedParams.error);
   }
 
   if (!req.user) {
