@@ -5,6 +5,15 @@ import { pool } from "../src/db/pool.js";
 const seedAdminEmail = process.env.SEED_ADMIN_EMAIL ?? "admin@adfix.local";
 const seedAdminName = process.env.SEED_ADMIN_NAME ?? "Adfix Admin";
 const seedAdminPassword = process.env.SEED_ADMIN_PASSWORD ?? "ChangeMe123!";
+const seedDemoUserPassword = process.env.SEED_DEMO_USER_PASSWORD ?? "DemoUser123!";
+
+const demoUsers = [
+  { email: "manager@adfix.local", name: "Project Manager" },
+  { email: "designer@adfix.local", name: "Creative Designer" },
+  { email: "editor@adfix.local", name: "Video Editor" },
+  { email: "coordinator@adfix.local", name: "Project Coordinator" },
+  { email: "viewer@adfix.local", name: "Read Only Viewer" }
+];
 
 function readSeedProfileArg() {
   const profileArg = process.argv.find((arg) => arg.startsWith("--profile="));
@@ -112,6 +121,30 @@ async function seedDemoData() {
   console.log("Seeded demo data profile");
 }
 
+async function ensureDemoUsers() {
+  const passwordHash = await bcrypt.hash(seedDemoUserPassword, 12);
+
+  for (const user of demoUsers) {
+    await pool.query(
+      `
+      INSERT INTO users (email, name, password_hash, is_active, is_admin)
+      VALUES ($1, $2, $3, TRUE, FALSE)
+      ON CONFLICT (email)
+      DO UPDATE
+        SET name = EXCLUDED.name,
+            password_hash = EXCLUDED.password_hash,
+            is_active = TRUE,
+            is_admin = FALSE,
+            deleted_at = NULL,
+            updated_at = NOW()
+      `,
+      [user.email, user.name, passwordHash]
+    );
+  }
+
+  console.log(`Seeded ${demoUsers.length} demo users`);
+}
+
 async function run() {
   // Access env to fail fast if required config is missing.
   void env.DATABASE_URL;
@@ -120,6 +153,7 @@ async function run() {
 
   const profile = readSeedProfileArg() ?? env.SEED_PROFILE;
   if (profile === "demo") {
+    await ensureDemoUsers();
     await seedDemoData();
   }
 }

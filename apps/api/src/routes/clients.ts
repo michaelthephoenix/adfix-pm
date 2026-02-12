@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { requireAuth } from "../middleware/auth.js";
 import type { AuthenticatedRequest } from "../types/http.js";
-import { insertActivityLog } from "../services/activity-log.service.js";
+import { insertActivityLog, listClientActivity } from "../services/activity-log.service.js";
 import {
   createClient,
   deleteClient,
@@ -34,6 +34,10 @@ const clientsListQuerySchema = z.object({
   pageSize: z.coerce.number().int().min(1).max(100).optional().default(20),
   sortBy: z.enum(["createdAt", "updatedAt", "name"]).optional().default("createdAt"),
   sortOrder: z.enum(["asc", "desc"]).optional().default("desc")
+});
+
+const clientActivityQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(200).optional().default(50)
 });
 
 clientsRouter.use(requireAuth);
@@ -69,6 +73,26 @@ clientsRouter.get("/:id", async (req, res) => {
   }
 
   return res.status(200).json({ data: client });
+});
+
+clientsRouter.get("/:id/activity", async (req, res) => {
+  const parsedParams = idParamsSchema.safeParse(req.params);
+  if (!parsedParams.success) {
+    return sendValidationError(res, "Invalid client id", parsedParams.error);
+  }
+
+  const parsedQuery = clientActivityQuerySchema.safeParse(req.query);
+  if (!parsedQuery.success) {
+    return sendValidationError(res, "Invalid client activity query", parsedQuery.error);
+  }
+
+  const client = await getClientById(parsedParams.data.id);
+  if (!client) {
+    return sendNotFound(res, "Client not found");
+  }
+
+  const activity = await listClientActivity(parsedParams.data.id, parsedQuery.data.limit);
+  return res.status(200).json({ data: activity });
 });
 
 clientsRouter.post("/", async (req: AuthenticatedRequest, res) => {

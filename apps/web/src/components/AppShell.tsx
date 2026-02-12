@@ -3,8 +3,14 @@ import { useAuth } from "../state/auth";
 
 const navItems = [
   { to: "/dashboard", label: "Dashboard" },
+  { to: "/clients", label: "Clients" },
   { to: "/projects", label: "Projects" },
-  { to: "/notifications", label: "Notifications" }
+  { to: "/tasks", label: "Tasks" },
+  { to: "/reports", label: "Reports" },
+  { to: "/search", label: "Search" },
+  { to: "/team", label: "Team" },
+  { to: "/notifications", label: "Notifications" },
+  { to: "/settings", label: "Settings" }
 ];
 
 export function AppShell() {
@@ -30,7 +36,14 @@ export function AppShell() {
         <header className="topbar">
           <div>
             <p className="eyebrow">Signed in as</p>
-            <p>{user?.name}</p>
+            <div className="user-chip">
+              {user?.avatarUrl ? (
+                <img src={user.avatarUrl} alt={`${user.name} avatar`} className="avatar" />
+              ) : (
+                <div className="avatar avatar-fallback">{(user?.name ?? "?").slice(0, 1).toUpperCase()}</div>
+              )}
+              <p>{user?.name}</p>
+            </div>
           </div>
           <button onClick={() => logout()} className="ghost-button">
             Logout

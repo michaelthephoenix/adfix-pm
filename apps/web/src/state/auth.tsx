@@ -1,5 +1,6 @@
 import { createContext, useContext, useMemo, useState } from "react";
-import { apiRequest } from "../lib/api";
+import { apiRequest, setUnauthorizedHandler } from "../lib/api";
+import { useEffect } from "react";
 import type { AuthTokens, User } from "../types";
 
 type AuthContextValue = {
@@ -7,8 +8,10 @@ type AuthContextValue = {
   isInitializing: boolean;
   user: User | null;
   accessToken: string | null;
+  refreshToken: string | null;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  updateLocalUser: (input: Partial<User>) => void;
 };
 
 const STORAGE_KEY = "adfix.auth.v1";
@@ -44,6 +47,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [storedAuth, setStoredAuth] = useState<StoredAuth | null>(() => readStoredAuth());
   const [isInitializing] = useState(false);
 
+  useEffect(() => {
+    setUnauthorizedHandler(() => {
+      setStoredAuth(null);
+      writeStoredAuth(null);
+      if (window.location.pathname !== "/login") {
+        window.location.assign("/login");
+      }
+    });
+
+    return () => {
+      setUnauthorizedHandler(null);
+    };
+  }, []);
+
   const login = async (email: string, password: string) => {
     const result = await apiRequest<AuthTokens>("/auth/login", {
       method: "POST",
@@ -71,14 +88,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     writeStoredAuth(null);
   };
 
+  const updateLocalUser = (input: Partial<User>) => {
+    setStoredAuth((previous) => {
+      if (!previous) return previous;
+      const next = {
+        ...previous,
+        user: {
+          ...previous.user,
+          ...input
+        }
+      };
+      writeStoredAuth(next);
+      return next;
+    });
+  };
+
   const value = useMemo<AuthContextValue>(
     () => ({
       isAuthenticated: Boolean(storedAuth?.accessToken),
       isInitializing,
       user: storedAuth?.user ?? null,
       accessToken: storedAuth?.accessToken ?? null,
+      refreshToken: storedAuth?.refreshToken ?? null,
       login,
-      logout
+      logout,
+      updateLocalUser
     }),
     [isInitializing, storedAuth]
   );

@@ -3,6 +3,7 @@ export type User = {
   email: string;
   name: string;
   isAdmin: boolean;
+  avatarUrl?: string | null;
 };
 
 export type AuthTokens = {

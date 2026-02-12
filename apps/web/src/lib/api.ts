@@ -1,4 +1,5 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:4000/api/v1";
+let unauthorizedHandler: (() => void) | null = null;
 
 type RequestOptions = {
   method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
@@ -17,6 +18,10 @@ export class ApiError extends Error {
   }
 }
 
+export function setUnauthorizedHandler(handler: (() => void) | null) {
+  unauthorizedHandler = handler;
+}
+
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     method: options.method ?? "GET",
@@ -33,6 +38,10 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
       payload = (await response.json()) as { error?: string; code?: string };
     } catch {
       payload = null;
+    }
+
+    if (response.status === 401 && unauthorizedHandler) {
+      unauthorizedHandler();
     }
 
     throw new ApiError(
