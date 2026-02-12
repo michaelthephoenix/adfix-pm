@@ -9,6 +9,7 @@ import { tasksRouter } from "./routes/tasks.js";
 import { filesRouter } from "./routes/files.js";
 import { analyticsRouter } from "./routes/analytics.js";
 import { usersRouter } from "./routes/users.js";
+import { searchRouter } from "./routes/search.js";
 import { apiRateLimiter, authRateLimiter } from "./middleware/rate-limit.js";
 import { errorHandler, notFoundHandler } from "./middleware/errors.js";
 
@@ -29,6 +30,7 @@ export function createApp() {
   app.use("/api/files", apiRateLimiter, filesRouter);
   app.use("/api/analytics", apiRateLimiter, analyticsRouter);
   app.use("/api/users", apiRateLimiter, usersRouter);
+  app.use("/api/search", apiRateLimiter, searchRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

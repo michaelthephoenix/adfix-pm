@@ -792,4 +792,79 @@ describe("API integration", () => {
       "project_team_member_removed"
     ]);
   });
+
+  it("search: global and scoped search across projects/tasks/files/clients", async () => {
+    const auth = await login();
+
+    const clientResponse = await request(app)
+      .post("/api/clients")
+      .set("Authorization", `Bearer ${auth.accessToken}`)
+      .send({ name: "Searchable Client" });
+
+    expect(clientResponse.status).toBe(201);
+    const clientId = clientResponse.body.data.id as string;
+
+    const projectResponse = await request(app)
+      .post("/api/projects")
+      .set("Authorization", `Bearer ${auth.accessToken}`)
+      .send({
+        clientId,
+        name: "Searchable Project",
+        description: "Campaign plan document",
+        startDate: "2026-02-12",
+        deadline: "2026-04-01"
+      });
+
+    expect(projectResponse.status).toBe(201);
+    const projectId = projectResponse.body.data.id as string;
+
+    const taskResponse = await request(app)
+      .post("/api/tasks")
+      .set("Authorization", `Bearer ${auth.accessToken}`)
+      .send({
+        projectId,
+        title: "Searchable Task",
+        description: "Storyboard for searchable campaign",
+        phase: "production"
+      });
+
+    expect(taskResponse.status).toBe(201);
+
+    const fileResponse = await request(app)
+      .post("/api/files/upload")
+      .set("Authorization", `Bearer ${auth.accessToken}`)
+      .send({
+        projectId,
+        fileName: "searchable-brief.pdf",
+        fileType: "creative_brief",
+        storageType: "s3",
+        objectKey: "projects/x/searchable-brief.pdf",
+        mimeType: "application/pdf",
+        fileSize: 1024
+      });
+
+    expect(fileResponse.status).toBe(201);
+
+    const globalSearch = await request(app)
+      .get("/api/search")
+      .query({ q: "searchable", scope: "all" })
+      .set("Authorization", `Bearer ${auth.accessToken}`);
+
+    expect(globalSearch.status).toBe(200);
+    expect(globalSearch.body.data.clients.length).toBeGreaterThan(0);
+    expect(globalSearch.body.data.projects.length).toBeGreaterThan(0);
+    expect(globalSearch.body.data.tasks.length).toBeGreaterThan(0);
+    expect(globalSearch.body.data.files.length).toBeGreaterThan(0);
+
+    const projectsOnlySearch = await request(app)
+      .get("/api/search")
+      .query({ q: "searchable", scope: "projects" })
+      .set("Authorization", `Bearer ${auth.accessToken}`);
+
+    expect(projectsOnlySearch.status).toBe(200);
+    expect(projectsOnlySearch.body.data.projects.length).toBeGreaterThan(0);
+    expect(projectsOnlySearch.body.data.tasks.length).toBe(0);
+    expect(projectsOnlySearch.body.data.files.length).toBe(0);
+    expect(projectsOnlySearch.body.data.clients.length).toBe(0);
+  });
 });

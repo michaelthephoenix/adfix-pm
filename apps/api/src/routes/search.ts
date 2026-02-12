@@ -1,0 +1,30 @@
+import { Router } from "express";
+import { z } from "zod";
+import { requireAuth } from "../middleware/auth.js";
+import { runSearch } from "../services/search.service.js";
+
+export const searchRouter = Router();
+
+const searchQuerySchema = z.object({
+  q: z.string().trim().min(2).max(100),
+  scope: z.enum(["all", "projects", "tasks", "files", "clients"]).default("all"),
+  limit: z.coerce.number().int().min(1).max(50).default(20)
+});
+
+searchRouter.use(requireAuth);
+
+searchRouter.get("/", async (req, res) => {
+  const parsed = searchQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid search query" });
+  }
+
+  const data = await runSearch({
+    query: parsed.data.q,
+    scope: parsed.data.scope,
+    limit: parsed.data.limit
+  });
+
+  return res.status(200).json({ data });
+});
+
