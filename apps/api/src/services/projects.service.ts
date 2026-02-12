@@ -332,17 +332,56 @@ export async function updateProject(
 }
 
 export async function deleteProject(projectId: string, userId: string) {
-  const result = await pool.query<{ id: string }>(
-    `UPDATE projects
-     SET deleted_at = NOW(), updated_at = NOW()
-     WHERE id = $1
-       AND created_by = $2
-       AND deleted_at IS NULL
-     RETURNING id`,
-    [projectId, userId]
-  );
+  const client = await pool.connect();
 
-  return result.rowCount === 1;
+  try {
+    await client.query("BEGIN");
+
+    const projectResult = await client.query<{ id: string }>(
+      `UPDATE projects
+       SET deleted_at = NOW(), updated_at = NOW()
+       WHERE id = $1
+         AND created_by = $2
+         AND deleted_at IS NULL
+       RETURNING id`,
+      [projectId, userId]
+    );
+
+    if (projectResult.rowCount === 0) {
+      await client.query("ROLLBACK");
+      return false;
+    }
+
+    await client.query(
+      `UPDATE tasks
+       SET deleted_at = NOW(), updated_at = NOW()
+       WHERE project_id = $1
+         AND deleted_at IS NULL`,
+      [projectId]
+    );
+
+    await client.query(
+      `UPDATE files
+       SET deleted_at = NOW()
+       WHERE project_id = $1
+         AND deleted_at IS NULL`,
+      [projectId]
+    );
+
+    await client.query(
+      `DELETE FROM project_team
+       WHERE project_id = $1`,
+      [projectId]
+    );
+
+    await client.query("COMMIT");
+    return true;
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 export async function transitionProjectPhase(input: {

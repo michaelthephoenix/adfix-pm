@@ -238,11 +238,72 @@ describe("API integration", () => {
 
     expect(skipTransition.status).toBe(409);
 
+    const extraTask = await request(app)
+      .post("/api/tasks")
+      .set("Authorization", `Bearer ${auth.accessToken}`)
+      .send({
+        projectId,
+        title: "Task that should be hidden after project delete",
+        phase: "strategy_planning"
+      });
+    expect(extraTask.status).toBe(201);
+
+    const extraFile = await request(app)
+      .post("/api/files/upload")
+      .set("Authorization", `Bearer ${auth.accessToken}`)
+      .send({
+        projectId,
+        fileName: "project-doc.pdf",
+        fileType: "proposal",
+        storageType: "s3",
+        objectKey: "projects/test/project-doc.pdf",
+        mimeType: "application/pdf",
+        fileSize: 1000
+      });
+    expect(extraFile.status).toBe(201);
+
+    const secondUserPasswordHash = await bcrypt.hash("ProjectTeam123!", 12);
+    const secondUserInsert = await pool.query<{ id: string }>(
+      `INSERT INTO users (email, name, password_hash, is_active, created_at, updated_at)
+       VALUES ('projectmember@adfix.local', 'Project Member', $1, TRUE, NOW(), NOW())
+       RETURNING id`,
+      [secondUserPasswordHash]
+    );
+    const secondUserId = secondUserInsert.rows[0].id;
+
+    const addTeamMember = await request(app)
+      .post(`/api/projects/${projectId}/team`)
+      .set("Authorization", `Bearer ${auth.accessToken}`)
+      .send({ userId: secondUserId, role: "Designer" });
+    expect(addTeamMember.status).toBe(201);
+
     const deleteResponse = await request(app)
       .delete(`/api/projects/${projectId}`)
       .set("Authorization", `Bearer ${auth.accessToken}`);
 
     expect(deleteResponse.status).toBe(204);
+
+    const getDeletedProject = await request(app)
+      .get(`/api/projects/${projectId}`)
+      .set("Authorization", `Bearer ${auth.accessToken}`);
+    expect(getDeletedProject.status).toBe(404);
+
+    const tasksAfterProjectDelete = await request(app)
+      .get(`/api/tasks?projectId=${projectId}`)
+      .set("Authorization", `Bearer ${auth.accessToken}`);
+    expect(tasksAfterProjectDelete.status).toBe(200);
+    expect(tasksAfterProjectDelete.body.data.length).toBe(0);
+
+    const filesAfterProjectDelete = await request(app)
+      .get(`/api/files/project/${projectId}`)
+      .set("Authorization", `Bearer ${auth.accessToken}`);
+    expect(filesAfterProjectDelete.status).toBe(200);
+    expect(filesAfterProjectDelete.body.data.length).toBe(0);
+
+    const teamAfterProjectDelete = await request(app)
+      .get(`/api/projects/${projectId}/team`)
+      .set("Authorization", `Bearer ${auth.accessToken}`);
+    expect(teamAfterProjectDelete.status).toBe(404);
 
     const projectLogRows = await pool.query<{ action: string }>(
       `SELECT action
