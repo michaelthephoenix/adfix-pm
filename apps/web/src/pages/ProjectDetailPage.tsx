@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { apiRequest, ApiError } from "../lib/api";
 import { useAuth } from "../state/auth";
 
@@ -120,6 +120,18 @@ function getStatusActions(status: Task["status"]) {
   return [];
 }
 
+function formatLabel(value: string) {
+  return value
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function getTaskBadgeClass(kind: "status" | "priority", value: string) {
+  const normalized = value.replaceAll("_", "-");
+  return `badge badge-${kind} badge-${kind}-${normalized}`;
+}
+
 export function ProjectDetailPage() {
   const { projectId } = useParams();
   const { accessToken } = useAuth();
@@ -130,7 +142,12 @@ export function ProjectDetailPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [phaseReason, setPhaseReason] = useState("");
   const [phaseError, setPhaseError] = useState<string | null>(null);
-  const [taskDrafts, setTaskDrafts] = useState<Record<string, { assignedTo: string; dueDate: string }>>({});
+  const [taskDrafts, setTaskDrafts] = useState<
+    Record<string, { assignedTo: string; dueDate: string; priority: string }>
+  >({});
+  const [taskActionState, setTaskActionState] = useState<Record<string, "idle" | "saving" | "saved" | "error">>(
+    {}
+  );
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [commentBody, setCommentBody] = useState("");
   const [fileLinkName, setFileLinkName] = useState("");
@@ -266,20 +283,33 @@ export function ProjectDetailPage() {
         accessToken: accessToken ?? undefined,
         body: { status: input.status }
       }),
-    onSuccess: refreshData
+    onSuccess: async (_, variables) => {
+      setTaskActionState((previous) => ({ ...previous, [variables.taskId]: "saved" }));
+      await refreshData();
+    },
+    onError: (_error, variables) => {
+      setTaskActionState((previous) => ({ ...previous, [variables.taskId]: "error" }));
+    }
   });
 
   const updateTaskMutation = useMutation({
-    mutationFn: (input: { taskId: string; assignedTo: string; dueDate: string }) =>
+    mutationFn: (input: { taskId: string; assignedTo: string; dueDate: string; priority: string }) =>
       apiRequest(`/tasks/${input.taskId}`, {
         method: "PUT",
         accessToken: accessToken ?? undefined,
         body: {
           assignedTo: input.assignedTo ? input.assignedTo : null,
-          dueDate: input.dueDate ? input.dueDate : null
+          dueDate: input.dueDate ? input.dueDate : null,
+          priority: input.priority
         }
       }),
-    onSuccess: refreshData
+    onSuccess: async (_, variables) => {
+      setTaskActionState((previous) => ({ ...previous, [variables.taskId]: "saved" }));
+      await refreshData();
+    },
+    onError: (_error, variables) => {
+      setTaskActionState((previous) => ({ ...previous, [variables.taskId]: "error" }));
+    }
   });
 
   const createFileLinkMutation = useMutation({
@@ -429,7 +459,13 @@ export function ProjectDetailPage() {
         if (!next[task.id]) {
           next[task.id] = {
             assignedTo: task.assigned_to ?? "",
-            dueDate: task.due_date ? task.due_date.slice(0, 10) : ""
+            dueDate: task.due_date ? task.due_date.slice(0, 10) : "",
+            priority: task.priority
+          };
+        } else {
+          next[task.id] = {
+            ...next[task.id],
+            priority: next[task.id].priority || task.priority
           };
         }
       }
@@ -467,7 +503,12 @@ export function ProjectDetailPage() {
           <h2>{project.name}</h2>
           <p className="muted">{project.client_name}</p>
         </div>
-        <p className="badge">{project.current_user_role ?? "n/a"}</p>
+        <div className="inline-actions">
+          <p className="badge">{project.current_user_role ?? "n/a"}</p>
+          <Link to="/projects" className="ghost-button">
+            Back to projects
+          </Link>
+        </div>
       </div>
 
       <div className="tab-strip">
@@ -481,25 +522,25 @@ export function ProjectDetailPage() {
           className={activeTab === "tasks" ? "tab-button active" : "tab-button"}
           onClick={() => setActiveTab("tasks")}
         >
-          Tasks
+          Tasks ({tasksQuery.data?.meta.total ?? 0})
         </button>
         <button
           className={activeTab === "files" ? "tab-button active" : "tab-button"}
           onClick={() => setActiveTab("files")}
         >
-          Files
+          Files ({filesQuery.data?.meta.total ?? 0})
         </button>
         <button
           className={activeTab === "activity" ? "tab-button active" : "tab-button"}
           onClick={() => setActiveTab("activity")}
         >
-          Activity
+          Activity ({activityQuery.data?.data.length ?? 0})
         </button>
         <button
           className={activeTab === "team" ? "tab-button active" : "tab-button"}
           onClick={() => setActiveTab("team")}
         >
-          Team
+          Team ({teamQuery.data?.data.length ?? 0})
         </button>
       </div>
 
@@ -508,15 +549,15 @@ export function ProjectDetailPage() {
           <div className="kpi-grid">
             <article className="card">
               <p className="eyebrow">Phase</p>
-              <p className="kpi-value short">{project.current_phase}</p>
+              <p className="kpi-value short">{formatLabel(project.current_phase)}</p>
             </article>
             <article className="card">
               <p className="eyebrow">Priority</p>
-              <p className="kpi-value short">{project.priority}</p>
+              <p className="kpi-value short">{formatLabel(project.priority)}</p>
             </article>
             <article className="card">
               <p className="eyebrow">Deadline</p>
-              <p className="kpi-value short">{project.deadline}</p>
+              <p className="kpi-value short">{new Date(project.deadline).toLocaleDateString()}</p>
             </article>
             <article className="card">
               <p className="eyebrow">Tasks</p>
@@ -595,6 +636,8 @@ export function ProjectDetailPage() {
               <p>Loading tasks...</p>
             ) : tasksQuery.isError ? (
               <p>Could not load tasks.</p>
+            ) : !tasksQuery.data?.data.length ? (
+              <p className="muted">No tasks yet for this project.</p>
             ) : (
               <table>
                 <thead>
@@ -612,8 +655,10 @@ export function ProjectDetailPage() {
                   {tasksQuery.data?.data.map((task) => (
                     <tr key={task.id}>
                       <td>{task.title}</td>
-                      <td>{task.phase}</td>
-                      <td>{task.status}</td>
+                      <td>{formatLabel(task.phase)}</td>
+                      <td>
+                        <span className={getTaskBadgeClass("status", task.status)}>{formatLabel(task.status)}</span>
+                      </td>
                       <td>
                         <select
                           value={taskDrafts[task.id]?.assignedTo ?? ""}
@@ -622,7 +667,8 @@ export function ProjectDetailPage() {
                               ...previous,
                               [task.id]: {
                                 assignedTo: event.target.value,
-                                dueDate: previous[task.id]?.dueDate ?? (task.due_date ? task.due_date.slice(0, 10) : "")
+                                dueDate: previous[task.id]?.dueDate ?? (task.due_date ? task.due_date.slice(0, 10) : ""),
+                                priority: previous[task.id]?.priority ?? task.priority
                               }
                             }))
                           }
@@ -636,7 +682,27 @@ export function ProjectDetailPage() {
                           ))}
                         </select>
                       </td>
-                      <td>{task.priority}</td>
+                      <td>
+                        <select
+                          value={taskDrafts[task.id]?.priority ?? task.priority}
+                          onChange={(event) =>
+                            setTaskDrafts((previous) => ({
+                              ...previous,
+                              [task.id]: {
+                                assignedTo: previous[task.id]?.assignedTo ?? (task.assigned_to ?? ""),
+                                dueDate: previous[task.id]?.dueDate ?? (task.due_date ? task.due_date.slice(0, 10) : ""),
+                                priority: event.target.value
+                              }
+                            }))
+                          }
+                          disabled={!canWriteTask}
+                        >
+                          <option value="low">Low</option>
+                          <option value="medium">Medium</option>
+                          <option value="high">High</option>
+                          <option value="urgent">Urgent</option>
+                        </select>
+                      </td>
                       <td>
                         <input
                           type="date"
@@ -646,7 +712,8 @@ export function ProjectDetailPage() {
                               ...previous,
                               [task.id]: {
                                 assignedTo: previous[task.id]?.assignedTo ?? (task.assigned_to ?? ""),
-                                dueDate: event.target.value
+                                dueDate: event.target.value,
+                                priority: previous[task.id]?.priority ?? task.priority
                               }
                             }))
                           }
@@ -658,14 +725,16 @@ export function ProjectDetailPage() {
                           <button
                             type="button"
                             className="ghost-button"
-                            disabled={!canWriteTask || updateTaskMutation.isPending}
-                            onClick={() =>
+                            disabled={!canWriteTask || updateTaskMutation.isPending || statusMutation.isPending}
+                            onClick={() => {
+                              setTaskActionState((previous) => ({ ...previous, [task.id]: "saving" }));
                               updateTaskMutation.mutate({
                                 taskId: task.id,
                                 assignedTo: taskDrafts[task.id]?.assignedTo ?? "",
-                                dueDate: taskDrafts[task.id]?.dueDate ?? ""
-                              })
-                            }
+                                dueDate: taskDrafts[task.id]?.dueDate ?? "",
+                                priority: taskDrafts[task.id]?.priority ?? task.priority
+                              });
+                            }}
                           >
                             Save
                           </button>
@@ -674,8 +743,11 @@ export function ProjectDetailPage() {
                               type="button"
                               key={`${task.id}-${action.status}`}
                               className="ghost-button"
-                              disabled={!canWriteTask || statusMutation.isPending}
-                              onClick={() => statusMutation.mutate({ taskId: task.id, status: action.status })}
+                              disabled={!canWriteTask || statusMutation.isPending || updateTaskMutation.isPending}
+                              onClick={() => {
+                                setTaskActionState((previous) => ({ ...previous, [task.id]: "saving" }));
+                                statusMutation.mutate({ taskId: task.id, status: action.status });
+                              }}
                             >
                               {action.label}
                             </button>
@@ -687,6 +759,9 @@ export function ProjectDetailPage() {
                           >
                             Comments
                           </button>
+                          {taskActionState[task.id] === "saving" ? <span className="muted">Saving...</span> : null}
+                          {taskActionState[task.id] === "saved" ? <span className="muted">Saved</span> : null}
+                          {taskActionState[task.id] === "error" ? <span className="error-text">Error</span> : null}
                         </div>
                       </td>
                     </tr>
@@ -810,6 +885,8 @@ export function ProjectDetailPage() {
               <p>Loading files...</p>
             ) : filesQuery.isError ? (
               <p>Could not load files.</p>
+            ) : !filesQuery.data?.data.length ? (
+              <p className="muted">No files linked yet.</p>
             ) : (
               <table>
                 <thead>
@@ -826,8 +903,8 @@ export function ProjectDetailPage() {
                   {filesQuery.data?.data.map((file) => (
                     <tr key={file.id}>
                       <td>{file.file_name}</td>
-                      <td>{file.file_type}</td>
-                      <td>{file.storage_type}</td>
+                      <td>{formatLabel(file.file_type)}</td>
+                      <td>{formatLabel(file.storage_type)}</td>
                       <td>{file.file_size}</td>
                       <td>{new Date(file.created_at).toLocaleString()}</td>
                       <td>
@@ -870,7 +947,7 @@ export function ProjectDetailPage() {
               {activityQuery.data?.data.length ? (
                 activityQuery.data.data.map((entry) => (
                   <article key={entry.id} className="activity-item">
-                    <p className="notice-title">{entry.action}</p>
+                    <p className="notice-title">{formatLabel(entry.action)}</p>
                     <p className="muted">
                       by {entry.user_name ?? "system"} at {new Date(entry.created_at).toLocaleString()}
                     </p>
@@ -928,6 +1005,8 @@ export function ProjectDetailPage() {
               <p>Loading team...</p>
             ) : teamQuery.isError ? (
               <p>Could not load team.</p>
+            ) : !teamQuery.data?.data.length ? (
+              <p className="muted">No team members assigned yet.</p>
             ) : (
               <table>
                 <thead>
@@ -944,7 +1023,7 @@ export function ProjectDetailPage() {
                     <tr key={member.user_id}>
                       <td>{member.user_name}</td>
                       <td>{member.user_email}</td>
-                      <td>{member.role}</td>
+                      <td>{formatLabel(member.role)}</td>
                       <td>{new Date(member.created_at).toLocaleString()}</td>
                       <td>
                         {canManageTeam ? (

@@ -61,6 +61,7 @@ export function ProjectsPage() {
   const [teamRole, setTeamRole] = useState<"manager" | "member" | "viewer">("member");
   const [teamAssignments, setTeamAssignments] = useState<Array<{ userId: string; role: "manager" | "member" | "viewer" }>>([]);
   const [formError, setFormError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const projectsQuery = useQuery({
     queryKey: ["projects"],
@@ -90,11 +91,12 @@ export function ProjectsPage() {
   });
 
   const creatingNewClient = clientSelection === "__new__";
+  const deadlineIsValid = !startDate || !deadline || deadline >= startDate;
 
   const canSubmit = useMemo(() => {
     const hasClient = creatingNewClient ? Boolean(newClientName.trim()) : Boolean(clientSelection);
-    return Boolean(hasClient && name.trim() && startDate && deadline);
-  }, [clientSelection, creatingNewClient, deadline, name, newClientName, startDate]);
+    return Boolean(hasClient && name.trim() && startDate && deadline && deadlineIsValid);
+  }, [clientSelection, creatingNewClient, deadline, deadlineIsValid, name, newClientName, startDate]);
 
   const createProjectMutation = useMutation({
     mutationFn: async () => {
@@ -139,8 +141,10 @@ export function ProjectsPage() {
           )
         );
       }
+
+      return { projectId: createdProject.data.id, projectName: name.trim() };
     },
-    onSuccess: async () => {
+    onSuccess: async (result) => {
       setName("");
       setDescription("");
       setPriority("medium");
@@ -151,6 +155,7 @@ export function ProjectsPage() {
       setNewClientName("");
       setNewClientCompany("");
       setFormError(null);
+      setSuccessMessage(`Project "${result.projectName}" created successfully.`);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["projects"] }),
         queryClient.invalidateQueries({ queryKey: ["clients-for-project-form"] })
@@ -162,11 +167,17 @@ export function ProjectsPage() {
         return;
       }
       setFormError("Could not create project.");
+      setSuccessMessage(null);
     }
   });
 
   const handleCreateProject = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    setSuccessMessage(null);
+    if (!deadlineIsValid) {
+      setFormError("Deadline must be on or after the start date.");
+      return;
+    }
     if (!canSubmit) return;
     createProjectMutation.mutate();
   };
@@ -197,6 +208,8 @@ export function ProjectsPage() {
       </div>
       <form className="card task-create-form" onSubmit={handleCreateProject}>
         <h3>Create project</h3>
+        {clientsQuery.isError ? <p className="error-text">Could not load clients for selection.</p> : null}
+        {usersQuery.isError ? <p className="error-text">Could not load users for team assignment.</p> : null}
         <div className="project-form-grid">
           <select value={clientSelection} onChange={(event) => setClientSelection(event.target.value)} required>
             <option value="">Select client</option>
@@ -240,6 +253,7 @@ export function ProjectsPage() {
             Create
           </button>
         </div>
+        {!deadlineIsValid ? <p className="error-text">Deadline must be on or after the start date.</p> : null}
         <div className="project-team-builder">
           <div className="task-form-grid">
             <select value={teamUserId} onChange={(event) => setTeamUserId(event.target.value)}>
@@ -291,6 +305,7 @@ export function ProjectsPage() {
           onChange={(event) => setDescription(event.target.value)}
         />
         {formError ? <p className="error-text">{formError}</p> : null}
+        {successMessage ? <p>{successMessage}</p> : null}
       </form>
       <div className="card table-wrap">
         <table>

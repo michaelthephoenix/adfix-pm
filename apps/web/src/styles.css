@@ -186,6 +186,50 @@ td {
   text-transform: uppercase;
 }
 
+.badge-status,
+.badge-priority {
+  text-transform: none;
+  font-size: 0.8rem;
+  padding: 4px 8px;
+}
+
+.badge-status-pending {
+  background: #f8f2e4;
+}
+
+.badge-status-in-progress {
+  background: #e7f3ff;
+  border-color: #bdd6f2;
+}
+
+.badge-status-completed {
+  background: #e4f5e8;
+  border-color: #b8ddb9;
+}
+
+.badge-status-blocked {
+  background: #fdeaea;
+  border-color: #f0b8b8;
+}
+
+.badge-priority-low {
+  background: #eef5ea;
+}
+
+.badge-priority-medium {
+  background: #f8f2e4;
+}
+
+.badge-priority-high {
+  background: #ffeeda;
+  border-color: #e3c79b;
+}
+
+.badge-priority-urgent {
+  background: #ffe1e1;
+  border-color: #e9aaaa;
+}
+
 .tab-strip {
   display: inline-flex;
   gap: 8px;
