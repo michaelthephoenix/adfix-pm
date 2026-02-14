@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
 import { apiRequest } from "../lib/api";
 import { useAuth } from "../state/auth";
 
@@ -17,16 +18,6 @@ type UsersResponse = {
   };
 };
 
-type AuditLogsResponse = {
-  data: Array<{
-    id: string;
-    action: string;
-    created_at: string;
-    user_name: string | null;
-    user_email: string | null;
-  }>;
-};
-
 export function TeamPage() {
   const { accessToken, user } = useAuth();
   const queryClient = useQueryClient();
@@ -41,15 +32,6 @@ export function TeamPage() {
     enabled: Boolean(accessToken)
   });
 
-  const auditLogsQuery = useQuery({
-    queryKey: ["team-audit-logs"],
-    queryFn: () =>
-      apiRequest<AuditLogsResponse>("/users/audit-logs?page=1&pageSize=20&sortBy=createdAt&sortOrder=desc", {
-        accessToken: accessToken ?? undefined
-      }),
-    enabled: Boolean(accessToken && isAdmin)
-  });
-
   const toggleUserStatusMutation = useMutation({
     mutationFn: (input: { userId: string; isActive: boolean }) =>
       apiRequest(`/users/${input.userId}/status`, {
@@ -58,10 +40,7 @@ export function TeamPage() {
         body: { isActive: input.isActive }
       }),
     onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["team-users"] }),
-        queryClient.invalidateQueries({ queryKey: ["team-audit-logs"] })
-      ]);
+      await queryClient.invalidateQueries({ queryKey: ["team-users"] });
     }
   });
 
@@ -69,7 +48,14 @@ export function TeamPage() {
     <section>
       <div className="section-head">
         <h2>Team</h2>
-        <p className="muted">{usersQuery.data?.meta.total ?? 0} users</p>
+        <div className="inline-actions">
+          <p className="muted">{usersQuery.data?.meta.total ?? 0} users</p>
+          {isAdmin ? (
+            <Link to="/audit-logs" className="ghost-button">
+              View audit logs
+            </Link>
+          ) : null}
+        </div>
       </div>
 
       <div className="card table-wrap">
@@ -120,33 +106,6 @@ export function TeamPage() {
               ))}
             </tbody>
           </table>
-        )}
-      </div>
-
-      <div className="card">
-        <h3>Audit Log</h3>
-        {!isAdmin ? (
-          <p className="muted">Admin access required for audit log view.</p>
-        ) : auditLogsQuery.isLoading ? (
-          <p>Loading audit logs...</p>
-        ) : auditLogsQuery.isError ? (
-          <p>Could not load audit logs.</p>
-        ) : (
-          <div className="activity-list">
-            {auditLogsQuery.data?.data.length ? (
-              auditLogsQuery.data.data.map((entry) => (
-                <article key={entry.id} className="activity-item">
-                  <p className="notice-title">{entry.action}</p>
-                  <p className="muted">
-                    by {entry.user_name ?? entry.user_email ?? "system"} at{" "}
-                    {new Date(entry.created_at).toLocaleString()}
-                  </p>
-                </article>
-              ))
-            ) : (
-              <p className="muted">No audit entries.</p>
-            )}
-          </div>
         )}
       </div>
     </section>

@@ -13,6 +13,7 @@ import { SearchPage } from "./pages/SearchPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { TeamPage } from "./pages/TeamPage";
 import { TasksPage } from "./pages/TasksPage";
+import { AuditLogsPage } from "./pages/AuditLogsPage";
 
 export function App() {
   return (
@@ -35,6 +36,7 @@ export function App() {
         <Route path="/reports" element={<ReportsPage />} />
         <Route path="/search" element={<SearchPage />} />
         <Route path="/team" element={<TeamPage />} />
+        <Route path="/audit-logs" element={<AuditLogsPage />} />
         <Route path="/notifications" element={<NotificationsPage />} />
         <Route path="/settings" element={<SettingsPage />} />
       </Route>

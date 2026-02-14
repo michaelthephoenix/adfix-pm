@@ -9,6 +9,7 @@ const navItems = [
   { to: "/reports", label: "Reports" },
   { to: "/search", label: "Search" },
   { to: "/team", label: "Team" },
+  { to: "/audit-logs", label: "Audit Logs", adminOnly: true },
   { to: "/notifications", label: "Notifications" },
   { to: "/settings", label: "Settings" }
 ];
@@ -21,15 +22,17 @@ export function AppShell() {
       <aside className="sidebar">
         <h1>Adfix PM</h1>
         <nav>
-          {navItems.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              className={({ isActive }) => (isActive ? "nav-link active" : "nav-link")}
-            >
-              {item.label}
-            </NavLink>
-          ))}
+          {navItems
+            .filter((item) => !item.adminOnly || user?.isAdmin)
+            .map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                className={({ isActive }) => (isActive ? "nav-link active" : "nav-link")}
+              >
+                {item.label}
+              </NavLink>
+            ))}
         </nav>
       </aside>
       <main className="content">
