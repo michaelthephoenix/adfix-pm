@@ -1,7 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { apiRequest } from "../lib/api";
 import { useAuth } from "../state/auth";
+import { useUI } from "../state/ui";
 import { EmptyState, ErrorState, LoadingState } from "../components/States";
 
 type UsersResponse = {
@@ -21,8 +23,13 @@ type UsersResponse = {
 
 export function TeamPage() {
   const { accessToken, user } = useAuth();
+  const ui = useUI();
   const queryClient = useQueryClient();
   const isAdmin = Boolean(user?.isAdmin);
+  const [processingUserUpdate, setProcessingUserUpdate] = useState<{
+    userId: string;
+    nextIsActive: boolean;
+  } | null>(null);
 
   const usersQuery = useQuery({
     queryKey: ["team-users"],
@@ -34,14 +41,42 @@ export function TeamPage() {
   });
 
   const toggleUserStatusMutation = useMutation({
+    onMutate: async (input: { userId: string; isActive: boolean }) => {
+      setProcessingUserUpdate({ userId: input.userId, nextIsActive: input.isActive });
+      const filter = { queryKey: ["team-users"] as const };
+      await queryClient.cancelQueries(filter);
+      const snapshots = queryClient.getQueriesData<UsersResponse>(filter);
+
+      snapshots.forEach(([queryKey, previous]) => {
+        if (!previous) return;
+        queryClient.setQueryData<UsersResponse>(queryKey, {
+          ...previous,
+          data: previous.data.map((row) =>
+            row.id === input.userId ? { ...row, is_active: input.isActive } : row
+          )
+        });
+      });
+
+      return { snapshots };
+    },
     mutationFn: (input: { userId: string; isActive: boolean }) =>
       apiRequest(`/users/${input.userId}/status`, {
         method: "PATCH",
         accessToken: accessToken ?? undefined,
         body: { isActive: input.isActive }
       }),
-    onSuccess: async () => {
+    onSuccess: async (_result, input) => {
+      ui.success(input.isActive ? "User activated." : "User deactivated.");
       await queryClient.invalidateQueries({ queryKey: ["team-users"] });
+    },
+    onError: (_error, _input, context) => {
+      context?.snapshots?.forEach(([queryKey, previous]) => {
+        queryClient.setQueryData(queryKey, previous);
+      });
+      ui.error("Could not update user status.");
+    },
+    onSettled: () => {
+      setProcessingUserUpdate(null);
     }
   });
 
@@ -91,7 +126,7 @@ export function TeamPage() {
                       <button
                         type="button"
                         className="ghost-button"
-                        disabled={toggleUserStatusMutation.isPending}
+                        disabled={Boolean(processingUserUpdate)}
                         onClick={() =>
                           toggleUserStatusMutation.mutate({
                             userId: item.id,
@@ -99,7 +134,13 @@ export function TeamPage() {
                           })
                         }
                       >
-                        {item.is_active ? "Deactivate" : "Activate"}
+                        {processingUserUpdate?.userId === item.id
+                          ? processingUserUpdate.nextIsActive
+                            ? "Activating..."
+                            : "Deactivating..."
+                          : item.is_active
+                            ? "Deactivate"
+                            : "Activate"}
                       </button>
                     ) : (
                       "-"

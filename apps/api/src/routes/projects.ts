@@ -452,6 +452,29 @@ projectsRouter.patch("/:id/phase", async (req: AuthenticatedRequest, res) => {
     return sendConflict(res, "Invalid phase transition. Only next forward phase is allowed.");
   }
 
+  const teamMembers = await listProjectTeamMembers(parsedParams.data.id);
+  const recipients = teamMembers.filter((member) => member.user_id !== req.user?.id);
+
+  if (recipients.length > 0) {
+    await Promise.all(
+      recipients.map((member) =>
+        createNotification({
+          userId: member.user_id,
+          projectId: parsedParams.data.id,
+          type: "project_milestone_reached",
+          title: "Project milestone reached",
+          message: `Project "${result.project.name}" advanced to ${parsed.data.phase}.`,
+          metadata: {
+            projectId: parsedParams.data.id,
+            fromPhase: existingProject.current_phase,
+            toPhase: parsed.data.phase,
+            changedByUserId: req.user.id
+          }
+        })
+      )
+    );
+  }
+
   return res.status(200).json({ data: result.project });
 });
 

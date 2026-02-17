@@ -151,6 +151,10 @@ export function TasksPage() {
     setSearchParams(next, { replace: true });
   };
 
+  const clearFilters = () => {
+    setSearchParams(new URLSearchParams(), { replace: true });
+  };
+
   const allVisibleSelected =
     Boolean(tasksQuery.data?.data.length) &&
     tasksQuery.data?.data.every((task) => selectedTaskIds.includes(task.id));
@@ -211,8 +215,12 @@ export function TasksPage() {
           }
           onClick={applyBulkAction}
         >
-          Apply
+          {bulkDeleteMutation.isPending || bulkStatusMutation.isPending ? "Applying..." : "Apply"}
         </button>
+        <button type="button" className="ghost-button" onClick={clearFilters}>
+          Clear filters
+        </button>
+        <p className="muted">{selectedTaskIds.length} selected</p>
       </div>
 
       <div className="card table-wrap">

@@ -39,6 +39,7 @@ export function ClientsPage() {
   const [notes, setNotes] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [deletingClientId, setDeletingClientId] = useState<string | null>(null);
   const page = Number(searchParams.get("page") ?? "1") || 1;
   const sortBy = searchParams.get("sortBy") ?? "updatedAt";
   const sortOrder = searchParams.get("sortOrder") ?? "desc";
@@ -132,17 +133,43 @@ export function ClientsPage() {
   });
 
   const deleteClientMutation = useMutation({
+    onMutate: async (id: string) => {
+      setDeletingClientId(id);
+      const filter = { queryKey: ["clients-page"] as const };
+      await queryClient.cancelQueries(filter);
+      const snapshots = queryClient.getQueriesData<ClientsResponse>(filter);
+
+      snapshots.forEach(([queryKey, previous]) => {
+        if (!previous) return;
+        queryClient.setQueryData<ClientsResponse>(queryKey, {
+          ...previous,
+          data: previous.data.filter((client) => client.id !== id),
+          meta: {
+            ...previous.meta,
+            total: Math.max(0, previous.meta.total - 1)
+          }
+        });
+      });
+
+      return { snapshots };
+    },
     mutationFn: (id: string) =>
       apiRequest(`/clients/${id}`, {
         method: "DELETE",
         accessToken: accessToken ?? undefined
       }),
-    onSuccess: async () => {
-      await refreshClients();
+    onSuccess: () => {
       ui.success("Client deleted.");
     },
-    onError: () => {
+    onError: (_error, _id, context) => {
+      context?.snapshots?.forEach(([queryKey, previous]) => {
+        queryClient.setQueryData(queryKey, previous);
+      });
       ui.error("Could not delete client.");
+    },
+    onSettled: async () => {
+      setDeletingClientId(null);
+      await refreshClients();
     }
   });
 
@@ -199,7 +226,13 @@ export function ClientsPage() {
             type="submit"
             disabled={createClientMutation.isPending || updateClientMutation.isPending}
           >
-            {editingId ? "Save" : "Create"}
+            {createClientMutation.isPending || updateClientMutation.isPending
+              ? editingId
+                ? "Saving..."
+                : "Creating..."
+              : editingId
+                ? "Save"
+                : "Create"}
           </button>
         </div>
         {editingId ? (
@@ -283,9 +316,9 @@ export function ClientsPage() {
                           type="button"
                           className="ghost-button"
                           onClick={() => handleDelete(client.id, client.name)}
-                          disabled={deleteClientMutation.isPending}
+                          disabled={Boolean(deletingClientId)}
                         >
-                          Delete
+                          {deletingClientId === client.id ? "Deleting..." : "Delete"}
                         </button>
                       </div>
                     </td>

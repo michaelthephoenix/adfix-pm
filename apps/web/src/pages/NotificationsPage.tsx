@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { apiRequest } from "../lib/api";
 import { useAuth } from "../state/auth";
+import { useUI } from "../state/ui";
 import { EmptyState, ErrorState, LoadingState } from "../components/States";
 
 type Notification = {
@@ -22,7 +24,9 @@ type NotificationsResponse = {
 
 export function NotificationsPage() {
   const { accessToken } = useAuth();
+  const ui = useUI();
   const queryClient = useQueryClient();
+  const [processingNotificationId, setProcessingNotificationId] = useState<string | null>(null);
 
   const notificationsQuery = useQuery({
     queryKey: ["notifications"],
@@ -34,21 +38,86 @@ export function NotificationsPage() {
   });
 
   const markReadMutation = useMutation({
+    onMutate: async (id: string) => {
+      setProcessingNotificationId(id);
+      const filter = { queryKey: ["notifications"] as const };
+      await queryClient.cancelQueries(filter);
+      const snapshots = queryClient.getQueriesData<NotificationsResponse>(filter);
+
+      snapshots.forEach(([queryKey, previous]) => {
+        if (!previous) return;
+        queryClient.setQueryData<NotificationsResponse>(queryKey, {
+          ...previous,
+          data: previous.data.map((item) =>
+            item.id === id ? { ...item, is_read: true } : item
+          ),
+          meta: {
+            ...previous.meta,
+            unreadCount: Math.max(
+              0,
+              previous.meta.unreadCount - (previous.data.some((item) => item.id === id && !item.is_read) ? 1 : 0)
+            )
+          }
+        });
+      });
+
+      return { snapshots };
+    },
     mutationFn: (id: string) =>
       apiRequest(`/notifications/${id}/read`, {
         method: "PATCH",
         accessToken: accessToken ?? undefined
       }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["notifications"] })
+    onSuccess: () => {
+      ui.success("Notification marked as read.");
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+    },
+    onError: (_error, _id, context) => {
+      context?.snapshots?.forEach(([queryKey, previous]) => {
+        queryClient.setQueryData(queryKey, previous);
+      });
+      ui.error("Could not mark notification as read.");
+    },
+    onSettled: () => {
+      setProcessingNotificationId(null);
+    }
   });
 
   const markAllReadMutation = useMutation({
+    onMutate: async () => {
+      const filter = { queryKey: ["notifications"] as const };
+      await queryClient.cancelQueries(filter);
+      const snapshots = queryClient.getQueriesData<NotificationsResponse>(filter);
+
+      snapshots.forEach(([queryKey, previous]) => {
+        if (!previous) return;
+        queryClient.setQueryData<NotificationsResponse>(queryKey, {
+          ...previous,
+          data: previous.data.map((item) => ({ ...item, is_read: true })),
+          meta: {
+            ...previous.meta,
+            unreadCount: 0
+          }
+        });
+      });
+
+      return { snapshots };
+    },
     mutationFn: () =>
       apiRequest("/notifications/read-all", {
         method: "POST",
         accessToken: accessToken ?? undefined
       }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["notifications"] })
+    onSuccess: () => {
+      ui.success("All notifications marked as read.");
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+    },
+    onError: (_error, _input, context) => {
+      context?.snapshots?.forEach(([queryKey, previous]) => {
+        queryClient.setQueryData(queryKey, previous);
+      });
+      ui.error("Could not mark all notifications as read.");
+    }
   });
 
   if (notificationsQuery.isLoading) {
@@ -67,8 +136,12 @@ export function NotificationsPage() {
         <h2>Notifications</h2>
         <div className="inline-actions">
           <p className="muted">{notificationsQuery.data?.meta.unreadCount ?? 0} unread</p>
-          <button className="ghost-button" onClick={() => markAllReadMutation.mutate()}>
-            Mark all read
+          <button
+            className="ghost-button"
+            onClick={() => markAllReadMutation.mutate()}
+            disabled={markAllReadMutation.isPending}
+          >
+            {markAllReadMutation.isPending ? "Marking all..." : "Mark all read"}
           </button>
         </div>
       </div>
@@ -84,9 +157,9 @@ export function NotificationsPage() {
                 <button
                   className="ghost-button"
                   onClick={() => markReadMutation.mutate(notification.id)}
-                  disabled={markReadMutation.isPending}
+                  disabled={Boolean(processingNotificationId) || markAllReadMutation.isPending}
                 >
-                  Mark read
+                  {processingNotificationId === notification.id ? "Marking..." : "Mark read"}
                 </button>
               ) : null}
             </article>

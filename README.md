@@ -31,6 +31,23 @@ Monorepo scaffold for the Adfix Project Management System.
 - `npm run test:api`: run integration tests (auth, clients, projects, phase transitions, activity logs)
 - `npm run test:api:coverage`: run integration tests with coverage thresholds
 
+## Troubleshooting
+- Login fails / pages stay on loading:
+  - Ensure API is running: `npm run dev:api`
+  - Check health: `http://localhost:4000/api/health` should return `200`
+- Frontend can’t load data (`ERR_CONNECTION_REFUSED` to `:4000`):
+  - Start web + API together:
+    - `npm run dev:web`
+    - `npm run dev:api`
+- Database-related auth/data failures:
+  - Ensure Docker Desktop is running
+  - Start Postgres container: `docker compose up -d`
+  - Confirm container status: `docker compose ps`
+- Missing seed user / invalid credentials:
+  - Run `npm run db:seed` and login with `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD`
+- Schema mismatch after pulling latest code:
+  - Run `npm run db:migrate`
+
 ## Rate Limiting
 - Auth routes (`/api/auth/*`): `AUTH_RATE_LIMIT_MAX` per `AUTH_RATE_LIMIT_WINDOW_MS`
 - Protected API routes: `API_RATE_LIMIT_MAX` per `API_RATE_LIMIT_WINDOW_MS`

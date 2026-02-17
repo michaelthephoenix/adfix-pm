@@ -1363,6 +1363,12 @@ describe("API integration", () => {
       .send({ userId: assigneeId, role: "member" });
     expect(addMemberResponse.status).toBe(201);
 
+    const phaseTransitionResponse = await request(app)
+      .patch(`/api/projects/${projectId}/phase`)
+      .set("Authorization", `Bearer ${ownerAuth.accessToken}`)
+      .send({ phase: "strategy_planning", reason: "Milestone reached" });
+    expect(phaseTransitionResponse.status).toBe(200);
+
     const taskResponse = await request(app)
       .post("/api/tasks")
       .set("Authorization", `Bearer ${ownerAuth.accessToken}`)
@@ -1381,10 +1387,11 @@ describe("API integration", () => {
       .set("Authorization", `Bearer ${assigneeAuth.accessToken}`);
 
     expect(listResponse.status).toBe(200);
-    expect(listResponse.body.data.length).toBe(2);
-    expect(listResponse.body.meta.unreadCount).toBe(2);
+    expect(listResponse.body.data.length).toBe(3);
+    expect(listResponse.body.meta.unreadCount).toBe(3);
     expect(listResponse.body.data[0].type).toBe("task_assigned");
-    expect(listResponse.body.data[1].type).toBe("project_team_assigned");
+    expect(listResponse.body.data.some((item: { type: string }) => item.type === "project_team_assigned")).toBe(true);
+    expect(listResponse.body.data.some((item: { type: string }) => item.type === "project_milestone_reached")).toBe(true);
 
     const markReadResponse = await request(app)
       .patch(`/api/notifications/${listResponse.body.data[0].id}/read`)
@@ -1400,15 +1407,15 @@ describe("API integration", () => {
       .set("Authorization", `Bearer ${assigneeAuth.accessToken}`);
 
     expect(unreadOnlyResponse.status).toBe(200);
-    expect(unreadOnlyResponse.body.data.length).toBe(1);
-    expect(unreadOnlyResponse.body.meta.unreadCount).toBe(1);
+    expect(unreadOnlyResponse.body.data.length).toBe(2);
+    expect(unreadOnlyResponse.body.meta.unreadCount).toBe(2);
 
     const readAllResponse = await request(app)
       .post("/api/notifications/read-all")
       .set("Authorization", `Bearer ${assigneeAuth.accessToken}`);
 
     expect(readAllResponse.status).toBe(200);
-    expect(readAllResponse.body.data.updatedCount).toBe(1);
+    expect(readAllResponse.body.data.updatedCount).toBe(2);
 
     const unreadAfterReadAll = await request(app)
       .get("/api/notifications")
