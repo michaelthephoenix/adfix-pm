@@ -89,7 +89,7 @@ export function SearchPage() {
       ) : searchQuery.isLoading ? (
         <LoadingState message="Searching..." />
       ) : searchQuery.isError ? (
-        <ErrorState message="Could not run search." />
+        <ErrorState message="Could not run search." onRetry={() => void searchQuery.refetch()} />
       ) : (
         <div className="tasks-pane">
           <ResultSection title="Projects" items={searchQuery.data?.data.projects ?? []} />

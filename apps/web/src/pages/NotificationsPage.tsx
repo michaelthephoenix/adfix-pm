@@ -56,7 +56,9 @@ export function NotificationsPage() {
   }
 
   if (notificationsQuery.isError) {
-    return <ErrorState message="Could not load notifications." />;
+    return (
+      <ErrorState message="Could not load notifications." onRetry={() => void notificationsQuery.refetch()} />
+    );
   }
 
   return (

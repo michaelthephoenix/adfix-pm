@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "../lib/api";
 import { useAuth } from "../state/auth";
+import { EmptyState, ErrorState, LoadingState } from "../components/States";
 
 type ProjectsAnalyticsResponse = {
   data: Array<{
@@ -105,9 +106,14 @@ export function ReportsPage() {
       <div className="card table-wrap">
         <h3>Project Performance</h3>
         {projectsQuery.isLoading ? (
-          <p>Loading project analytics...</p>
+          <LoadingState message="Loading project analytics..." />
         ) : projectsQuery.isError ? (
-          <p>Could not load project analytics.</p>
+          <ErrorState
+            message="Could not load project analytics."
+            onRetry={() => void projectsQuery.refetch()}
+          />
+        ) : (projectsQuery.data?.data.length ?? 0) === 0 ? (
+          <EmptyState message="No project analytics available yet." />
         ) : (
           <table>
             <thead>
@@ -137,9 +143,11 @@ export function ReportsPage() {
       <div className="card table-wrap">
         <h3>Team Throughput</h3>
         {teamQuery.isLoading ? (
-          <p>Loading team analytics...</p>
+          <LoadingState message="Loading team analytics..." />
         ) : teamQuery.isError ? (
-          <p>Could not load team analytics.</p>
+          <ErrorState message="Could not load team analytics." onRetry={() => void teamQuery.refetch()} />
+        ) : (teamQuery.data?.data.length ?? 0) === 0 ? (
+          <EmptyState message="No team analytics available yet." />
         ) : (
           <table>
             <thead>
@@ -169,9 +177,11 @@ export function ReportsPage() {
       <div className="card table-wrap">
         <h3>Delivery Timeline</h3>
         {timelineQuery.isLoading ? (
-          <p>Loading timeline...</p>
+          <LoadingState message="Loading timeline..." />
         ) : timelineQuery.isError ? (
-          <p>Could not load timeline.</p>
+          <ErrorState message="Could not load timeline." onRetry={() => void timelineQuery.refetch()} />
+        ) : (timelineQuery.data?.data.length ?? 0) === 0 ? (
+          <EmptyState message="No delivery timeline data available yet." />
         ) : (
           <table>
             <thead>

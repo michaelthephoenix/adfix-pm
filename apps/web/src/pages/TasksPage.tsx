@@ -4,6 +4,7 @@ import { useSearchParams } from "react-router-dom";
 import { apiRequest } from "../lib/api";
 import { useAuth } from "../state/auth";
 import { useUI } from "../state/ui";
+import { EmptyState, ErrorState, LoadingState } from "../components/States";
 
 type TaskRow = {
   id: string;
@@ -19,6 +20,10 @@ type TaskRow = {
 type TasksResponse = {
   data: TaskRow[];
   meta: {
+    page: number;
+    pageSize: number;
+    sortBy: string;
+    sortOrder: string;
     total: number;
   };
 };
@@ -31,21 +36,25 @@ export function TasksPage() {
   const status = searchParams.get("status") ?? "";
   const phase = searchParams.get("phase") ?? "";
   const overdue = searchParams.get("overdue") ?? "";
+  const page = Number(searchParams.get("page") ?? "1") || 1;
+  const sortBy = searchParams.get("sortBy") ?? "updatedAt";
+  const sortOrder = searchParams.get("sortOrder") ?? "desc";
+  const pageSize = 25;
   const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([]);
   const [bulkAction, setBulkAction] = useState<"" | "start" | "complete" | "delete">("");
 
   const queryString = useMemo(() => {
     const params = new URLSearchParams({
-      page: "1",
-      pageSize: "100",
-      sortBy: "updatedAt",
-      sortOrder: "desc"
+      page: String(page),
+      pageSize: String(pageSize),
+      sortBy,
+      sortOrder
     });
     if (status) params.set("status", status);
     if (phase) params.set("phase", phase);
     if (overdue) params.set("overdue", overdue);
     return params.toString();
-  }, [overdue, phase, status]);
+  }, [overdue, page, pageSize, phase, sortBy, sortOrder, status]);
 
   const tasksQuery = useQuery({
     queryKey: ["tasks-global", queryString],
@@ -126,12 +135,18 @@ export function TasksPage() {
     );
   };
 
-  const setFilterParam = (key: "status" | "phase" | "overdue", value: string) => {
+  const setFilterParam = (
+    key: "status" | "phase" | "overdue" | "page" | "sortBy" | "sortOrder",
+    value: string
+  ) => {
     const next = new URLSearchParams(searchParams);
     if (!value) {
       next.delete(key);
     } else {
       next.set(key, value);
+    }
+    if (key !== "page") {
+      next.set("page", "1");
     }
     setSearchParams(next, { replace: true });
   };
@@ -168,6 +183,18 @@ export function TasksPage() {
           <option value="true">overdue only</option>
           <option value="false">not overdue</option>
         </select>
+        <select value={sortBy} onChange={(event) => setFilterParam("sortBy", event.target.value)}>
+          <option value="updatedAt">Sort: updatedAt</option>
+          <option value="createdAt">Sort: createdAt</option>
+          <option value="dueDate">Sort: dueDate</option>
+          <option value="priority">Sort: priority</option>
+          <option value="status">Sort: status</option>
+          <option value="title">Sort: title</option>
+        </select>
+        <select value={sortOrder} onChange={(event) => setFilterParam("sortOrder", event.target.value)}>
+          <option value="desc">desc</option>
+          <option value="asc">asc</option>
+        </select>
         <select value={bulkAction} onChange={(event) => setBulkAction(event.target.value as "" | "start" | "complete" | "delete")}>
           <option value="">Select action</option>
           <option value="start">Start selected</option>
@@ -190,52 +217,75 @@ export function TasksPage() {
 
       <div className="card table-wrap">
         {tasksQuery.isLoading ? (
-          <p>Loading tasks...</p>
+          <LoadingState message="Loading tasks..." />
         ) : tasksQuery.isError ? (
-          <p>Could not load tasks.</p>
+          <ErrorState message="Could not load tasks." onRetry={() => void tasksQuery.refetch()} />
+        ) : (tasksQuery.data?.data.length ?? 0) === 0 ? (
+          <EmptyState message="No tasks found for current filters." />
         ) : (
-          <table>
-            <thead>
-              <tr>
-                <th>
-                  <input
-                    type="checkbox"
-                    checked={Boolean(allVisibleSelected)}
-                    onChange={() =>
-                      setSelectedTaskIds(
-                        allVisibleSelected ? [] : (tasksQuery.data?.data.map((task) => task.id) ?? [])
-                      )
-                    }
-                  />
-                </th>
-                <th>Title</th>
-                <th>Status</th>
-                <th>Phase</th>
-                <th>Priority</th>
-                <th>Due</th>
-                <th>Project</th>
-              </tr>
-            </thead>
-            <tbody>
-              {tasksQuery.data?.data.map((task) => (
-                <tr key={task.id}>
-                  <td>
+          <>
+            <table>
+              <thead>
+                <tr>
+                  <th>
                     <input
                       type="checkbox"
-                      checked={selectedTaskIds.includes(task.id)}
-                      onChange={() => toggleTaskSelection(task.id)}
+                      checked={Boolean(allVisibleSelected)}
+                      onChange={() =>
+                        setSelectedTaskIds(
+                          allVisibleSelected ? [] : (tasksQuery.data?.data.map((task) => task.id) ?? [])
+                        )
+                      }
                     />
-                  </td>
-                  <td>{task.title}</td>
-                  <td>{task.status}</td>
-                  <td>{task.phase}</td>
-                  <td>{task.priority}</td>
-                  <td>{task.due_date ?? "-"}</td>
-                  <td className="mono-cell">{task.project_id}</td>
+                  </th>
+                  <th>Title</th>
+                  <th>Status</th>
+                  <th>Phase</th>
+                  <th>Priority</th>
+                  <th>Due</th>
+                  <th>Project</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {tasksQuery.data?.data.map((task) => (
+                  <tr key={task.id}>
+                    <td>
+                      <input
+                        type="checkbox"
+                        checked={selectedTaskIds.includes(task.id)}
+                        onChange={() => toggleTaskSelection(task.id)}
+                      />
+                    </td>
+                    <td>{task.title}</td>
+                    <td>{task.status}</td>
+                    <td>{task.phase}</td>
+                    <td>{task.priority}</td>
+                    <td>{task.due_date ?? "-"}</td>
+                    <td className="mono-cell">{task.project_id}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div className="inline-actions" style={{ marginTop: "10px" }}>
+              <button
+                type="button"
+                className="ghost-button"
+                disabled={page <= 1}
+                onClick={() => setFilterParam("page", String(Math.max(1, page - 1)))}
+              >
+                Previous
+              </button>
+              <p className="muted">Page {page}</p>
+              <button
+                type="button"
+                className="ghost-button"
+                disabled={(tasksQuery.data?.data.length ?? 0) < pageSize}
+                onClick={() => setFilterParam("page", String(page + 1))}
+              >
+                Next
+              </button>
+            </div>
+          </>
         )}
       </div>
     </section>

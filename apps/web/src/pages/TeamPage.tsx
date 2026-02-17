@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { apiRequest } from "../lib/api";
 import { useAuth } from "../state/auth";
-import { ErrorState, LoadingState } from "../components/States";
+import { EmptyState, ErrorState, LoadingState } from "../components/States";
 
 type UsersResponse = {
   data: Array<{
@@ -63,7 +63,9 @@ export function TeamPage() {
         {usersQuery.isLoading ? (
           <LoadingState message="Loading users..." />
         ) : usersQuery.isError ? (
-          <ErrorState message="Could not load users." />
+          <ErrorState message="Could not load users." onRetry={() => void usersQuery.refetch()} />
+        ) : (usersQuery.data?.data.length ?? 0) === 0 ? (
+          <EmptyState message="No users found." />
         ) : (
           <table>
             <thead>
