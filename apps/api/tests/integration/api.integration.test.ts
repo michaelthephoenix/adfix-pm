@@ -1064,6 +1064,12 @@ describe("API integration", () => {
     expect(auditLogsResponse.status).toBe(200);
     expect(Array.isArray(auditLogsResponse.body.data)).toBe(true);
     expect(auditLogsResponse.body.data.length).toBeGreaterThan(0);
+
+    const outsiderAuditLogsResponse = await request(app)
+      .get("/api/users/audit-logs")
+      .set("Authorization", `Bearer ${outsiderAuth.accessToken}`);
+    expect(outsiderAuditLogsResponse.status).toBe(403);
+    expect(outsiderAuditLogsResponse.body.code).toBe("FORBIDDEN");
   });
 
   it("project team: add/list/remove members with activity logs", async () => {
