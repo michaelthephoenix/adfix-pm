@@ -184,6 +184,7 @@ export async function listAuditLogs(input: {
   userId?: string;
   projectId?: string;
   action?: string;
+  search?: string;
   from?: string;
   to?: string;
   page?: number;
@@ -218,6 +219,16 @@ export async function listAuditLogs(input: {
     values.push(input.action);
     where.push(`a.action = $${values.length}`);
   }
+  if (input.search) {
+    values.push(`%${input.search}%`);
+    where.push(
+      `(a.action ILIKE $${values.length}
+        OR COALESCE(u.name, '') ILIKE $${values.length}
+        OR COALESCE(u.email, '') ILIKE $${values.length}
+        OR COALESCE(a.project_id::text, '') ILIKE $${values.length}
+        OR COALESCE(a.details::text, '') ILIKE $${values.length})`
+    );
+  }
   if (input.from) {
     values.push(input.from);
     where.push(`a.created_at >= $${values.length}::timestamptz`);
@@ -249,6 +260,7 @@ export async function listAuditLogs(input: {
     pool.query<{ total: string }>(
       `SELECT COUNT(*)::text AS total
        FROM activity_log a
+       LEFT JOIN users u ON u.id = a.user_id
        WHERE ${where.join(" AND ")}`,
       values
     )

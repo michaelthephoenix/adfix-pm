@@ -1,7 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { apiRequest } from "../lib/api";
 import { useAuth } from "../state/auth";
+import { useUI } from "../state/ui";
 
 type TaskRow = {
   id: string;
@@ -23,10 +25,12 @@ type TasksResponse = {
 
 export function TasksPage() {
   const { accessToken } = useAuth();
+  const ui = useUI();
   const queryClient = useQueryClient();
-  const [status, setStatus] = useState<string>("");
-  const [phase, setPhase] = useState<string>("");
-  const [overdue, setOverdue] = useState<string>("");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const status = searchParams.get("status") ?? "";
+  const phase = searchParams.get("phase") ?? "";
+  const overdue = searchParams.get("overdue") ?? "";
   const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([]);
   const [bulkAction, setBulkAction] = useState<"" | "start" | "complete" | "delete">("");
 
@@ -67,7 +71,13 @@ export function TasksPage() {
           status: nextStatus
         }
       }),
-    onSuccess: refreshTasks
+    onSuccess: async (_, nextStatus) => {
+      await refreshTasks();
+      ui.success(`Tasks updated to ${nextStatus}.`);
+    },
+    onError: () => {
+      ui.error("Could not update selected tasks.");
+    }
   });
 
   const bulkDeleteMutation = useMutation({
@@ -79,10 +89,16 @@ export function TasksPage() {
           taskIds: selectedTaskIds
         }
       }),
-    onSuccess: refreshTasks
+    onSuccess: async () => {
+      await refreshTasks();
+      ui.success("Selected tasks deleted.");
+    },
+    onError: () => {
+      ui.error("Could not delete selected tasks.");
+    }
   });
 
-  const applyBulkAction = () => {
+  const applyBulkAction = async () => {
     if (!bulkAction || selectedTaskIds.length === 0) return;
 
     if (bulkAction === "start") {
@@ -95,6 +111,12 @@ export function TasksPage() {
       return;
     }
 
+    const shouldDelete = await ui.confirm({
+      title: "Delete selected tasks",
+      message: `Delete ${selectedTaskIds.length} selected tasks? This cannot be undone.`,
+      confirmLabel: "Delete"
+    });
+    if (!shouldDelete) return;
     bulkDeleteMutation.mutate();
   };
 
@@ -102,6 +124,16 @@ export function TasksPage() {
     setSelectedTaskIds((previous) =>
       previous.includes(taskId) ? previous.filter((id) => id !== taskId) : [...previous, taskId]
     );
+  };
+
+  const setFilterParam = (key: "status" | "phase" | "overdue", value: string) => {
+    const next = new URLSearchParams(searchParams);
+    if (!value) {
+      next.delete(key);
+    } else {
+      next.set(key, value);
+    }
+    setSearchParams(next, { replace: true });
   };
 
   const allVisibleSelected =
@@ -116,14 +148,14 @@ export function TasksPage() {
       </div>
 
       <div className="card tasks-toolbar">
-        <select value={status} onChange={(event) => setStatus(event.target.value)}>
+        <select value={status} onChange={(event) => setFilterParam("status", event.target.value)}>
           <option value="">All statuses</option>
           <option value="pending">pending</option>
           <option value="in_progress">in_progress</option>
           <option value="completed">completed</option>
           <option value="blocked">blocked</option>
         </select>
-        <select value={phase} onChange={(event) => setPhase(event.target.value)}>
+        <select value={phase} onChange={(event) => setFilterParam("phase", event.target.value)}>
           <option value="">All phases</option>
           <option value="client_acquisition">client_acquisition</option>
           <option value="strategy_planning">strategy_planning</option>
@@ -131,7 +163,7 @@ export function TasksPage() {
           <option value="post_production">post_production</option>
           <option value="delivery">delivery</option>
         </select>
-        <select value={overdue} onChange={(event) => setOverdue(event.target.value)}>
+        <select value={overdue} onChange={(event) => setFilterParam("overdue", event.target.value)}>
           <option value="">Any due state</option>
           <option value="true">overdue only</option>
           <option value="false">not overdue</option>

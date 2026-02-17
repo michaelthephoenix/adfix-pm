@@ -10,6 +10,7 @@ type AuthContextValue = {
   accessToken: string | null;
   refreshToken: string | null;
   login: (email: string, password: string) => Promise<void>;
+  signup: (input: { email: string; name: string; password: string }) => Promise<void>;
   logout: () => Promise<void>;
   updateLocalUser: (input: Partial<User>) => void;
 };
@@ -76,6 +77,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     writeStoredAuth(next);
   };
 
+  const signup = async (input: { email: string; name: string; password: string }) => {
+    const result = await apiRequest<AuthTokens>("/auth/signup", {
+      method: "POST",
+      body: {
+        email: input.email,
+        name: input.name,
+        password: input.password
+      }
+    });
+
+    const next = {
+      accessToken: result.accessToken,
+      refreshToken: result.refreshToken,
+      user: result.user
+    };
+    setStoredAuth(next);
+    writeStoredAuth(next);
+  };
+
   const logout = async () => {
     if (storedAuth?.refreshToken) {
       await apiRequest<void>("/auth/logout", {
@@ -111,6 +131,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       accessToken: storedAuth?.accessToken ?? null,
       refreshToken: storedAuth?.refreshToken ?? null,
       login,
+      signup,
       logout,
       updateLocalUser
     }),

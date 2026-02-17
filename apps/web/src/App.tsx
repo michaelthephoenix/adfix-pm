@@ -14,11 +14,13 @@ import { SettingsPage } from "./pages/SettingsPage";
 import { TeamPage } from "./pages/TeamPage";
 import { TasksPage } from "./pages/TasksPage";
 import { AuditLogsPage } from "./pages/AuditLogsPage";
+import { SignupPage } from "./pages/SignupPage";
 
 export function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/signup" element={<SignupPage />} />
       <Route
         element={
           <RequireAuth>

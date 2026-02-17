@@ -20,6 +20,94 @@ type LoginResult = {
   };
 };
 
+async function createSessionForUser(input: {
+  userId: string;
+  email: string;
+  name: string;
+  isAdmin: boolean;
+  userAgent?: string;
+  ipAddress?: string;
+}): Promise<LoginResult> {
+  const sessionId = makeRefreshSessionId();
+  const refreshToken = signRefreshToken({ userId: input.userId, sessionId });
+  const refreshTokenHash = hashToken(refreshToken);
+  const refreshExpiresAt = buildRefreshExpiryDate();
+
+  await pool.query(
+    `INSERT INTO auth_sessions (id, user_id, refresh_token_hash, user_agent, ip_address, expires_at)
+     VALUES ($1, $2, $3, $4, NULLIF($5, '')::inet, $6)`,
+    [sessionId, input.userId, refreshTokenHash, input.userAgent ?? null, input.ipAddress ?? null, refreshExpiresAt]
+  );
+
+  await pool.query(
+    `UPDATE users SET last_login_at = NOW(), updated_at = NOW() WHERE id = $1`,
+    [input.userId]
+  );
+
+  const accessToken = signAccessToken({
+    userId: input.userId,
+    email: input.email,
+    name: input.name,
+    isAdmin: input.isAdmin
+  });
+
+  return {
+    accessToken,
+    refreshToken,
+    user: {
+      id: input.userId,
+      email: input.email,
+      name: input.name,
+      isAdmin: input.isAdmin
+    }
+  };
+}
+
+export async function signupWithEmailPassword(input: {
+  email: string;
+  name: string;
+  password: string;
+  userAgent?: string;
+  ipAddress?: string;
+}): Promise<LoginResult | "email_taken"> {
+  const passwordHash = await bcrypt.hash(input.password, 12);
+
+  try {
+    const createdUserQuery = await pool.query<{
+      id: string;
+      email: string;
+      name: string;
+      is_admin: boolean;
+    }>(
+      `INSERT INTO users (email, name, password_hash, is_active, is_admin, created_at, updated_at)
+       VALUES ($1, $2, $3, TRUE, FALSE, NOW(), NOW())
+       RETURNING id, email, name, is_admin`,
+      [input.email, input.name, passwordHash]
+    );
+
+    const createdUser = createdUserQuery.rows[0];
+
+    return createSessionForUser({
+      userId: createdUser.id,
+      email: createdUser.email,
+      name: createdUser.name,
+      isAdmin: createdUser.is_admin,
+      userAgent: input.userAgent,
+      ipAddress: input.ipAddress
+    });
+  } catch (error) {
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      (error as { code?: string }).code === "23505"
+    ) {
+      return "email_taken";
+    }
+    throw error;
+  }
+}
+
 export async function loginWithEmailPassword(input: {
   email: string;
   password: string;
@@ -46,39 +134,14 @@ export async function loginWithEmailPassword(input: {
   const passwordMatches = await bcrypt.compare(input.password, user.password_hash);
   if (!passwordMatches) return null;
 
-  const sessionId = makeRefreshSessionId();
-  const refreshToken = signRefreshToken({ userId: user.id, sessionId });
-  const refreshTokenHash = hashToken(refreshToken);
-  const refreshExpiresAt = buildRefreshExpiryDate();
-
-  await pool.query(
-    `INSERT INTO auth_sessions (id, user_id, refresh_token_hash, user_agent, ip_address, expires_at)
-     VALUES ($1, $2, $3, $4, NULLIF($5, '')::inet, $6)`,
-    [sessionId, user.id, refreshTokenHash, input.userAgent ?? null, input.ipAddress ?? null, refreshExpiresAt]
-  );
-
-  await pool.query(
-    `UPDATE users SET last_login_at = NOW(), updated_at = NOW() WHERE id = $1`,
-    [user.id]
-  );
-
-  const accessToken = signAccessToken({
+  return createSessionForUser({
     userId: user.id,
     email: user.email,
     name: user.name,
-    isAdmin: user.is_admin
+    isAdmin: user.is_admin,
+    userAgent: input.userAgent,
+    ipAddress: input.ipAddress
   });
-
-  return {
-    accessToken,
-    refreshToken,
-    user: {
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      isAdmin: user.is_admin
-    }
-  };
 }
 
 export async function refreshAuthToken(input: {

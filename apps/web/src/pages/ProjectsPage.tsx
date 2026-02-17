@@ -1,8 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FormEvent, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { apiRequest, ApiError } from "../lib/api";
 import { useAuth } from "../state/auth";
+import { ErrorState, LoadingState } from "../components/States";
 
 type Project = {
   id: string;
@@ -47,6 +48,7 @@ function toIsoDateString(date: Date) {
 export function ProjectsPage() {
   const { accessToken } = useAuth();
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [clientSelection, setClientSelection] = useState("");
   const [newClientName, setNewClientName] = useState("");
   const [newClientCompany, setNewClientCompany] = useState("");
@@ -63,10 +65,30 @@ export function ProjectsPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
+  const listPage = Number(searchParams.get("page") ?? "1") || 1;
+  const listSortBy = searchParams.get("sortBy") ?? "updatedAt";
+  const listSortOrder = searchParams.get("sortOrder") ?? "desc";
+  const listClientId = searchParams.get("clientId") ?? "";
+  const listPhase = searchParams.get("phase") ?? "";
+  const listPriority = searchParams.get("priority") ?? "";
+
+  const listQueryString = useMemo(() => {
+    const params = new URLSearchParams({
+      page: String(listPage),
+      pageSize: "25",
+      sortBy: listSortBy,
+      sortOrder: listSortOrder
+    });
+    if (listClientId) params.set("clientId", listClientId);
+    if (listPhase) params.set("phase", listPhase);
+    if (listPriority) params.set("priority", listPriority);
+    return params.toString();
+  }, [listClientId, listPage, listPhase, listPriority, listSortBy, listSortOrder]);
+
   const projectsQuery = useQuery({
-    queryKey: ["projects"],
+    queryKey: ["projects", listQueryString],
     queryFn: () =>
-      apiRequest<ProjectsResponse>("/projects?page=1&pageSize=25&sortBy=updatedAt&sortOrder=desc", {
+      apiRequest<ProjectsResponse>(`/projects?${listQueryString}`, {
         accessToken: accessToken ?? undefined
       }),
     enabled: Boolean(accessToken)
@@ -192,12 +214,34 @@ export function ProjectsPage() {
     setTeamRole("member");
   };
 
+  const setListParam = (key: "page" | "sortBy" | "sortOrder" | "clientId" | "phase" | "priority", value: string) => {
+    const next = new URLSearchParams(searchParams);
+    if (!value) {
+      next.delete(key);
+    } else {
+      next.set(key, value);
+    }
+    if (key !== "page") {
+      next.set("page", "1");
+    }
+    setSearchParams(next, { replace: true });
+  };
+
+  const clearListFilters = () => {
+    const next = new URLSearchParams(searchParams);
+    next.delete("clientId");
+    next.delete("phase");
+    next.delete("priority");
+    next.set("page", "1");
+    setSearchParams(next, { replace: true });
+  };
+
   if (projectsQuery.isLoading) {
-    return <div className="state-card">Loading projects...</div>;
+    return <LoadingState message="Loading projects..." />;
   }
 
   if (projectsQuery.isError) {
-    return <div className="state-card">Could not load projects.</div>;
+    return <ErrorState message="Could not load projects." onRetry={() => void projectsQuery.refetch()} />;
   }
 
   return (
@@ -307,6 +351,45 @@ export function ProjectsPage() {
         {formError ? <p className="error-text">{formError}</p> : null}
         {successMessage ? <p>{successMessage}</p> : null}
       </form>
+      <div className="card tasks-toolbar">
+        <select value={listClientId} onChange={(event) => setListParam("clientId", event.target.value)}>
+          <option value="">All clients</option>
+          {clientsQuery.data?.data.map((client) => (
+            <option key={client.id} value={client.id}>
+              {client.name}
+            </option>
+          ))}
+        </select>
+        <select value={listPhase} onChange={(event) => setListParam("phase", event.target.value)}>
+          <option value="">All phases</option>
+          <option value="client_acquisition">client_acquisition</option>
+          <option value="strategy_planning">strategy_planning</option>
+          <option value="production">production</option>
+          <option value="post_production">post_production</option>
+          <option value="delivery">delivery</option>
+        </select>
+        <select value={listPriority} onChange={(event) => setListParam("priority", event.target.value)}>
+          <option value="">All priorities</option>
+          <option value="low">low</option>
+          <option value="medium">medium</option>
+          <option value="high">high</option>
+          <option value="urgent">urgent</option>
+        </select>
+        <select value={listSortBy} onChange={(event) => setListParam("sortBy", event.target.value)}>
+          <option value="updatedAt">Sort: updatedAt</option>
+          <option value="createdAt">Sort: createdAt</option>
+          <option value="deadline">Sort: deadline</option>
+          <option value="name">Sort: name</option>
+          <option value="priority">Sort: priority</option>
+        </select>
+        <select value={listSortOrder} onChange={(event) => setListParam("sortOrder", event.target.value)}>
+          <option value="desc">desc</option>
+          <option value="asc">asc</option>
+        </select>
+        <button type="button" className="ghost-button" onClick={clearListFilters}>
+          Clear filters
+        </button>
+      </div>
       <div className="card table-wrap">
         <table>
           <thead>
@@ -336,6 +419,25 @@ export function ProjectsPage() {
             ))}
           </tbody>
         </table>
+        <div className="inline-actions" style={{ marginTop: "10px" }}>
+          <button
+            type="button"
+            className="ghost-button"
+            disabled={listPage <= 1}
+            onClick={() => setListParam("page", String(Math.max(1, listPage - 1)))}
+          >
+            Previous
+          </button>
+          <p className="muted">Page {listPage}</p>
+          <button
+            type="button"
+            className="ghost-button"
+            disabled={(projectsQuery.data?.data.length ?? 0) < 25}
+            onClick={() => setListParam("page", String(listPage + 1))}
+          >
+            Next
+          </button>
+        </div>
       </div>
     </section>
   );

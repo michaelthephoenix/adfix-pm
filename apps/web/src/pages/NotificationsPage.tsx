@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "../lib/api";
 import { useAuth } from "../state/auth";
+import { EmptyState, ErrorState, LoadingState } from "../components/States";
 
 type Notification = {
   id: string;
@@ -51,11 +52,11 @@ export function NotificationsPage() {
   });
 
   if (notificationsQuery.isLoading) {
-    return <div className="state-card">Loading notifications...</div>;
+    return <LoadingState message="Loading notifications..." />;
   }
 
   if (notificationsQuery.isError) {
-    return <div className="state-card">Could not load notifications.</div>;
+    return <ErrorState message="Could not load notifications." />;
   }
 
   return (
@@ -70,23 +71,27 @@ export function NotificationsPage() {
         </div>
       </div>
       <div className="card notifications-list">
-        {notificationsQuery.data?.data.map((notification) => (
-          <article key={notification.id} className={notification.is_read ? "notice read" : "notice"}>
-            <div>
-              <p className="notice-title">{notification.title}</p>
-              <p>{notification.message}</p>
-            </div>
-            {!notification.is_read ? (
-              <button
-                className="ghost-button"
-                onClick={() => markReadMutation.mutate(notification.id)}
-                disabled={markReadMutation.isPending}
-              >
-                Mark read
-              </button>
-            ) : null}
-          </article>
-        ))}
+        {notificationsQuery.data?.data.length ? (
+          notificationsQuery.data.data.map((notification) => (
+            <article key={notification.id} className={notification.is_read ? "notice read" : "notice"}>
+              <div>
+                <p className="notice-title">{notification.title}</p>
+                <p>{notification.message}</p>
+              </div>
+              {!notification.is_read ? (
+                <button
+                  className="ghost-button"
+                  onClick={() => markReadMutation.mutate(notification.id)}
+                  disabled={markReadMutation.isPending}
+                >
+                  Mark read
+                </button>
+              ) : null}
+            </article>
+          ))
+        ) : (
+          <EmptyState message="No notifications yet." />
+        )}
       </div>
     </section>
   );

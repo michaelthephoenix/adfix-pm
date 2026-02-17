@@ -1,4 +1,5 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:4000/api/v1";
+const API_TIMEOUT_MS = 12_000;
 let unauthorizedHandler: (() => void) | null = null;
 
 type RequestOptions = {
@@ -23,14 +24,32 @@ export function setUnauthorizedHandler(handler: (() => void) | null) {
 }
 
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    method: options.method ?? "GET",
-    headers: {
-      "content-type": "application/json",
-      ...(options.accessToken ? { authorization: `Bearer ${options.accessToken}` } : {})
-    },
-    body: typeof options.body === "undefined" ? undefined : JSON.stringify(options.body)
-  });
+  const abortController = new AbortController();
+  const timeoutId = setTimeout(() => abortController.abort(), API_TIMEOUT_MS);
+
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      method: options.method ?? "GET",
+      headers: {
+        "content-type": "application/json",
+        ...(options.accessToken ? { authorization: `Bearer ${options.accessToken}` } : {})
+      },
+      body: typeof options.body === "undefined" ? undefined : JSON.stringify(options.body),
+      signal: abortController.signal
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new ApiError("Request timed out. Please try again.", 408, "REQUEST_TIMEOUT");
+    }
+    throw new ApiError(
+      "Could not reach API server. Check that backend is running.",
+      503,
+      "API_UNREACHABLE"
+    );
+  } finally {
+    clearTimeout(timeoutId);
+  }
 
   if (!response.ok) {
     let payload: { error?: string; code?: string } | null = null;

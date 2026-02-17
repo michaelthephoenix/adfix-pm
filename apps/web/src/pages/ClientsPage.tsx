@@ -3,6 +3,7 @@ import { FormEvent, useState } from "react";
 import { Link } from "react-router-dom";
 import { apiRequest, ApiError } from "../lib/api";
 import { useAuth } from "../state/auth";
+import { useUI } from "../state/ui";
 
 type ClientRow = {
   id: string;
@@ -23,6 +24,7 @@ type ClientsResponse = {
 
 export function ClientsPage() {
   const { accessToken } = useAuth();
+  const ui = useUI();
   const queryClient = useQueryClient();
   const [name, setName] = useState("");
   const [company, setCompany] = useState("");
@@ -68,12 +70,15 @@ export function ClientsPage() {
       setEditingId(null);
       setFormError(null);
       await refreshClients();
+      ui.success("Client created.");
     },
     onError: (error) => {
       if (error instanceof ApiError) {
         setFormError(error.message);
+        ui.error(error.message);
       } else {
         setFormError("Could not create client.");
+        ui.error("Could not create client.");
       }
     }
   });
@@ -100,12 +105,15 @@ export function ClientsPage() {
       setEditingId(null);
       setFormError(null);
       await refreshClients();
+      ui.success("Client updated.");
     },
     onError: (error) => {
       if (error instanceof ApiError) {
         setFormError(error.message);
+        ui.error(error.message);
       } else {
         setFormError("Could not update client.");
+        ui.error("Could not update client.");
       }
     }
   });
@@ -116,7 +124,13 @@ export function ClientsPage() {
         method: "DELETE",
         accessToken: accessToken ?? undefined
       }),
-    onSuccess: refreshClients
+    onSuccess: async () => {
+      await refreshClients();
+      ui.success("Client deleted.");
+    },
+    onError: () => {
+      ui.error("Could not delete client.");
+    }
   });
 
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -127,6 +141,16 @@ export function ClientsPage() {
       return;
     }
     createClientMutation.mutate();
+  };
+
+  const handleDelete = async (id: string, nameValue: string) => {
+    const shouldDelete = await ui.confirm({
+      title: "Delete client",
+      message: `Delete "${nameValue}"? This cannot be undone.`,
+      confirmLabel: "Delete"
+    });
+    if (!shouldDelete) return;
+    deleteClientMutation.mutate(id);
   };
 
   return (
@@ -221,7 +245,7 @@ export function ClientsPage() {
                       <button
                         type="button"
                         className="ghost-button"
-                        onClick={() => deleteClientMutation.mutate(client.id)}
+                        onClick={() => handleDelete(client.id, client.name)}
                         disabled={deleteClientMutation.isPending}
                       >
                         Delete

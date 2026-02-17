@@ -20,6 +20,7 @@
     "db:seed:demo": "npm --workspace @adfix/api run db:seed:demo",
     "openapi:export": "npm --workspace @adfix/api run openapi:export",
     "test:api": "npm --workspace @adfix/api run test",
-    "test:api:coverage": "npm --workspace @adfix/api run test:coverage"
+    "test:api:coverage": "npm --workspace @adfix/api run test:coverage",
+    "test:web": "npm --workspace @adfix/web run test"
   }
 }

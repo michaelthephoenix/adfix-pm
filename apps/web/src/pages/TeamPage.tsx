@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { apiRequest } from "../lib/api";
 import { useAuth } from "../state/auth";
+import { ErrorState, LoadingState } from "../components/States";
 
 type UsersResponse = {
   data: Array<{
@@ -60,9 +61,9 @@ export function TeamPage() {
 
       <div className="card table-wrap">
         {usersQuery.isLoading ? (
-          <p>Loading users...</p>
+          <LoadingState message="Loading users..." />
         ) : usersQuery.isError ? (
-          <p>Could not load users.</p>
+          <ErrorState message="Could not load users." />
         ) : (
           <table>
             <thead>

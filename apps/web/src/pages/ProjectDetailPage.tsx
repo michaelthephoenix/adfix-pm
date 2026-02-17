@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { apiRequest, ApiError } from "../lib/api";
 import { useAuth } from "../state/auth";
+import { useUI } from "../state/ui";
 
 type ProjectDetailResponse = {
   data: {
@@ -135,6 +136,7 @@ function getTaskBadgeClass(kind: "status" | "priority", value: string) {
 export function ProjectDetailPage() {
   const { projectId } = useParams();
   const { accessToken } = useAuth();
+  const ui = useUI();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<"overview" | "tasks" | "files" | "activity" | "team">("overview");
   const [title, setTitle] = useState("");
@@ -148,6 +150,8 @@ export function ProjectDetailPage() {
   const [taskActionState, setTaskActionState] = useState<Record<string, "idle" | "saving" | "saved" | "error">>(
     {}
   );
+  const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([]);
+  const [bulkTaskAction, setBulkTaskAction] = useState<"" | "start" | "complete" | "delete">("");
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [commentBody, setCommentBody] = useState("");
   const [fileLinkName, setFileLinkName] = useState("");
@@ -353,7 +357,13 @@ export function ProjectDetailPage() {
         method: "DELETE",
         accessToken: accessToken ?? undefined
       }),
-    onSuccess: refreshData
+    onSuccess: async () => {
+      await refreshData();
+      ui.success("File removed.");
+    },
+    onError: () => {
+      ui.error("Could not remove file.");
+    }
   });
 
   const openFileMutation = useMutation({
@@ -400,7 +410,13 @@ export function ProjectDetailPage() {
         method: "DELETE",
         accessToken: accessToken ?? undefined
       }),
-    onSuccess: refreshData
+    onSuccess: async () => {
+      await refreshData();
+      ui.success("Team member removed.");
+    },
+    onError: () => {
+      ui.error("Could not remove team member.");
+    }
   });
 
   const phaseTransitionMutation = useMutation({
@@ -448,6 +464,52 @@ export function ProjectDetailPage() {
       }),
     onSuccess: async () => {
       await Promise.all([refreshComments(), refreshData()]);
+      ui.success("Comment deleted.");
+    },
+    onError: () => {
+      ui.error("Could not delete comment.");
+    }
+  });
+
+  const bulkStatusMutation = useMutation({
+    mutationFn: (nextStatus: Task["status"]) =>
+      apiRequest("/tasks/bulk/status", {
+        method: "POST",
+        accessToken: accessToken ?? undefined,
+        body: {
+          taskIds: selectedTaskIds,
+          status: nextStatus
+        }
+      }),
+    onSuccess: async (_, nextStatus) => {
+      setSelectedTaskIds([]);
+      await refreshData();
+      ui.success(`Selected tasks updated to ${formatLabel(nextStatus)}.`);
+    },
+    onError: () => {
+      ui.error("Could not update selected tasks.");
+    }
+  });
+
+  const bulkDeleteMutation = useMutation({
+    mutationFn: () =>
+      apiRequest("/tasks/bulk/delete", {
+        method: "POST",
+        accessToken: accessToken ?? undefined,
+        body: {
+          taskIds: selectedTaskIds
+        }
+      }),
+    onSuccess: async () => {
+      setSelectedTaskIds([]);
+      if (selectedTaskId && selectedTaskIds.includes(selectedTaskId)) {
+        setSelectedTaskId(null);
+      }
+      await refreshData();
+      ui.success("Selected tasks deleted.");
+    },
+    onError: () => {
+      ui.error("Could not delete selected tasks.");
     }
   });
 
@@ -473,6 +535,12 @@ export function ProjectDetailPage() {
     });
   }, [tasksQuery.data]);
 
+  useEffect(() => {
+    if (!tasksQuery.data?.data) return;
+    const availableIds = new Set(tasksQuery.data.data.map((task) => task.id));
+    setSelectedTaskIds((previous) => previous.filter((id) => availableIds.has(id)));
+  }, [tasksQuery.data?.data]);
+
   if (!projectId) {
     return <div className="state-card">Missing project id.</div>;
   }
@@ -495,6 +563,57 @@ export function ProjectDetailPage() {
   ] as const;
   const currentPhaseIndex = phaseFlow.indexOf(project.current_phase as (typeof phaseFlow)[number]);
   const nextPhase = currentPhaseIndex >= 0 && currentPhaseIndex < phaseFlow.length - 1 ? phaseFlow[currentPhaseIndex + 1] : null;
+
+  const handleDeleteFile = async (file: ProjectFile) => {
+    const shouldDelete = await ui.confirm({
+      title: "Delete file",
+      message: `Delete "${file.file_name}" from this project?`,
+      confirmLabel: "Delete"
+    });
+    if (!shouldDelete) return;
+    deleteFileMutation.mutate(file.id);
+  };
+
+  const handleRemoveTeamMember = async (member: ProjectTeamResponse["data"][number]) => {
+    const shouldRemove = await ui.confirm({
+      title: "Remove team member",
+      message: `Remove ${member.user_name} from this project team?`,
+      confirmLabel: "Remove"
+    });
+    if (!shouldRemove) return;
+    removeTeamMemberMutation.mutate(member.user_id);
+  };
+
+  const allVisibleTasksSelected =
+    Boolean(tasksQuery.data?.data.length) && tasksQuery.data?.data.every((task) => selectedTaskIds.includes(task.id));
+
+  const toggleTaskSelection = (taskId: string) => {
+    setSelectedTaskIds((previous) =>
+      previous.includes(taskId) ? previous.filter((id) => id !== taskId) : [...previous, taskId]
+    );
+  };
+
+  const applyBulkTaskAction = async () => {
+    if (!bulkTaskAction || selectedTaskIds.length === 0) return;
+
+    if (bulkTaskAction === "start") {
+      bulkStatusMutation.mutate("in_progress");
+      return;
+    }
+
+    if (bulkTaskAction === "complete") {
+      bulkStatusMutation.mutate("completed");
+      return;
+    }
+
+    const shouldDelete = await ui.confirm({
+      title: "Delete selected tasks",
+      message: `Delete ${selectedTaskIds.length} selected tasks from this project?`,
+      confirmLabel: "Delete"
+    });
+    if (!shouldDelete) return;
+    bulkDeleteMutation.mutate();
+  };
 
   return (
     <section>
@@ -600,6 +719,34 @@ export function ProjectDetailPage() {
         </div>
       ) : activeTab === "tasks" ? (
         <div className="tasks-pane">
+          <div className="card tasks-toolbar">
+            <select
+              value={bulkTaskAction}
+              onChange={(event) => setBulkTaskAction(event.target.value as "" | "start" | "complete" | "delete")}
+              disabled={!canWriteTask}
+            >
+              <option value="">Bulk action</option>
+              <option value="start">Start selected</option>
+              <option value="complete">Complete selected</option>
+              <option value="delete">Delete selected</option>
+            </select>
+            <button
+              type="button"
+              className="ghost-button"
+              onClick={applyBulkTaskAction}
+              disabled={
+                !canWriteTask ||
+                !bulkTaskAction ||
+                selectedTaskIds.length === 0 ||
+                bulkDeleteMutation.isPending ||
+                bulkStatusMutation.isPending
+              }
+            >
+              Apply
+            </button>
+            <p className="muted">{selectedTaskIds.length} selected</p>
+          </div>
+
           <form
             className="card task-create-form"
             onSubmit={(event) => {
@@ -642,6 +789,18 @@ export function ProjectDetailPage() {
               <table>
                 <thead>
                   <tr>
+                    <th>
+                      <input
+                        type="checkbox"
+                        checked={Boolean(allVisibleTasksSelected)}
+                        disabled={!canWriteTask}
+                        onChange={() =>
+                          setSelectedTaskIds(
+                            allVisibleTasksSelected ? [] : (tasksQuery.data?.data.map((task) => task.id) ?? [])
+                          )
+                        }
+                      />
+                    </th>
                     <th>Title</th>
                     <th>Phase</th>
                     <th>Status</th>
@@ -654,6 +813,14 @@ export function ProjectDetailPage() {
                 <tbody>
                   {tasksQuery.data?.data.map((task) => (
                     <tr key={task.id}>
+                      <td>
+                        <input
+                          type="checkbox"
+                          checked={selectedTaskIds.includes(task.id)}
+                          disabled={!canWriteTask}
+                          onChange={() => toggleTaskSelection(task.id)}
+                        />
+                      </td>
                       <td>{task.title}</td>
                       <td>{formatLabel(task.phase)}</td>
                       <td>
@@ -921,7 +1088,7 @@ export function ProjectDetailPage() {
                             <button
                               type="button"
                               className="ghost-button"
-                              onClick={() => deleteFileMutation.mutate(file.id)}
+                              onClick={() => handleDeleteFile(file)}
                               disabled={deleteFileMutation.isPending}
                             >
                               Delete
@@ -1030,7 +1197,7 @@ export function ProjectDetailPage() {
                           <button
                             type="button"
                             className="ghost-button"
-                            onClick={() => removeTeamMemberMutation.mutate(member.user_id)}
+                            onClick={() => handleRemoveTeamMember(member)}
                             disabled={removeTeamMemberMutation.isPending}
                           >
                             Remove

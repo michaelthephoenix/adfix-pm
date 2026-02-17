@@ -32,6 +32,7 @@ const auditLogsQuerySchema = z.object({
   userId: z.string().uuid().optional(),
   projectId: z.string().uuid().optional(),
   action: z.string().trim().min(1).max(100).optional(),
+  search: z.string().trim().min(1).max(200).optional(),
   from: z.string().datetime().optional(),
   to: z.string().datetime().optional(),
   page: z.coerce.number().int().min(1).optional().default(1),

@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "../lib/api";
 import { useAuth } from "../state/auth";
+import { EmptyState, ErrorState, LoadingState } from "../components/States";
 
 type DashboardResponse = {
   data: {
@@ -24,16 +25,16 @@ export function DashboardPage() {
   });
 
   if (dashboardQuery.isLoading) {
-    return <div className="state-card">Loading dashboard...</div>;
+    return <LoadingState message="Loading dashboard..." />;
   }
 
   if (dashboardQuery.isError) {
-    return <div className="state-card">Could not load dashboard.</div>;
+    return <ErrorState message="Could not load dashboard." onRetry={() => void dashboardQuery.refetch()} />;
   }
 
   const metrics = dashboardQuery.data?.data;
   if (!metrics) {
-    return <div className="state-card">No metrics available.</div>;
+    return <EmptyState message="No metrics available." />;
   }
 
   const totalProjects = metrics.projectsByPhase.reduce((sum, phase) => sum + phase.count, 0);

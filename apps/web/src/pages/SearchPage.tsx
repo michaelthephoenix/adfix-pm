@@ -1,8 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { apiRequest } from "../lib/api";
 import { useAuth } from "../state/auth";
+import { EmptyState, ErrorState, LoadingState } from "../components/States";
 
 type SearchItem = {
   id: string;
@@ -22,14 +22,6 @@ type SearchResponse = {
     clients: SearchItem[];
   };
 };
-
-const scopes = [
-  { value: "all", label: "All" },
-  { value: "projects", label: "Projects" },
-  { value: "tasks", label: "Tasks" },
-  { value: "files", label: "Files" },
-  { value: "clients", label: "Clients" }
-] as const;
 
 function ResultSection({
   title,
@@ -68,8 +60,9 @@ function ResultSection({
 
 export function SearchPage() {
   const { accessToken } = useAuth();
-  const [query, setQuery] = useState("demo");
-  const [scope, setScope] = useState<(typeof scopes)[number]["value"]>("all");
+  const [searchParams] = useSearchParams();
+  const query = searchParams.get("q") ?? "";
+  const scope = "all";
 
   const canSearch = query.trim().length >= 2;
 
@@ -91,40 +84,24 @@ export function SearchPage() {
         <h2>Search</h2>
       </div>
 
-      <div className="card tasks-toolbar">
-        <input
-          placeholder="Search projects, tasks, files, clients..."
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-        />
-        <select value={scope} onChange={(event) => setScope(event.target.value as (typeof scopes)[number]["value"])}>
-          {scopes.map((item) => (
-            <option key={item.value} value={item.value}>
-              {item.label}
-            </option>
-          ))}
-        </select>
-      </div>
-
       {!canSearch ? (
-        <div className="state-card">Enter at least 2 characters to search.</div>
+        <EmptyState message="Enter at least 2 characters to search." />
       ) : searchQuery.isLoading ? (
-        <div className="state-card">Searching...</div>
+        <LoadingState message="Searching..." />
       ) : searchQuery.isError ? (
-        <div className="state-card">Could not run search.</div>
+        <ErrorState message="Could not run search." />
       ) : (
         <div className="tasks-pane">
           <ResultSection title="Projects" items={searchQuery.data?.data.projects ?? []} />
           <ResultSection title="Tasks" items={searchQuery.data?.data.tasks ?? []} />
           <ResultSection title="Files" items={searchQuery.data?.data.files ?? []} />
           <ResultSection title="Clients" items={searchQuery.data?.data.clients ?? []} />
-          {scope === "all" &&
-          (searchQuery.data?.data.projects.length ?? 0) +
+          {(searchQuery.data?.data.projects.length ?? 0) +
             (searchQuery.data?.data.tasks.length ?? 0) +
             (searchQuery.data?.data.files.length ?? 0) +
             (searchQuery.data?.data.clients.length ?? 0) ===
             0 ? (
-            <div className="state-card">No results found.</div>
+            <EmptyState message="No results found." />
           ) : null}
         </div>
       )}

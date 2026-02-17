@@ -192,6 +192,46 @@ describe("API integration", () => {
     expect(counts.auth_logout_all).toBe(1);
   });
 
+  it("auth: signup creates account, returns tokens, and rejects duplicate email", async () => {
+    const signupEmail = "signup-user@adfix.local";
+    const signupPassword = "SignupPass123!";
+
+    const signupResponse = await request(app).post("/api/auth/signup").send({
+      email: signupEmail,
+      name: "Signup User",
+      password: signupPassword
+    });
+
+    expect(signupResponse.status).toBe(201);
+    expect(signupResponse.body.accessToken).toBeTypeOf("string");
+    expect(signupResponse.body.refreshToken).toBeTypeOf("string");
+    expect(signupResponse.body.user.email).toBe(signupEmail);
+    expect(signupResponse.body.user.isAdmin).toBe(false);
+
+    const duplicateSignupResponse = await request(app).post("/api/auth/signup").send({
+      email: signupEmail,
+      name: "Signup User Again",
+      password: signupPassword
+    });
+
+    expect(duplicateSignupResponse.status).toBe(409);
+
+    const loginResponse = await request(app).post("/api/auth/login").send({
+      email: signupEmail,
+      password: signupPassword
+    });
+    expect(loginResponse.status).toBe(200);
+
+    const signupLogCount = await pool.query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count
+       FROM activity_log
+       WHERE action = 'auth_signup'
+         AND user_id = $1`,
+      [signupResponse.body.user.id]
+    );
+    expect(Number(signupLogCount.rows[0].count)).toBe(1);
+  });
+
   it("clients: CRUD with activity logs", async () => {
     const auth = await login();
 
