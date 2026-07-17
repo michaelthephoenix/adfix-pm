@@ -3,6 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { apiRequest } from "../lib/api";
 import { useAuth } from "../state/auth";
 import { EmptyState, ErrorState, LoadingState } from "../components/States";
+import { PageHeader } from "../components/ui/PageHeader";
 
 type SearchItem = {
   id: string;
@@ -80,9 +81,7 @@ export function SearchPage() {
 
   return (
     <section>
-      <div className="section-head">
-        <h2>Search</h2>
-      </div>
+      <PageHeader title="Search" description={canSearch ? `Results for “${query.trim()}”.` : "Find projects, tasks, files, and clients."} />
 
       {!canSearch ? (
         <EmptyState message="Enter at least 2 characters to search." />

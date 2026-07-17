@@ -14,7 +14,11 @@ function assertSpecShape(spec: ReturnType<typeof buildOpenApiSpec>) {
     "/auth/login",
     "/users/audit-logs",
     "/tasks/{id}/comments",
-    "/notifications"
+    "/notifications",
+    "/client-invitations"
+    ,"/deliverables"
+    ,"/client-portal/projects"
+    ,"/files/upload-binary"
   ];
   const paths = spec.paths as Record<string, unknown>;
   for (const requiredPath of requiredPaths) {

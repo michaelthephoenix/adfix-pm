@@ -8,6 +8,7 @@ export type AccessTokenPayload = {
   email: string;
   name: string;
   isAdmin: boolean;
+  accountType: "staff" | "client";
   tokenType: "access";
 };
 

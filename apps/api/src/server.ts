@@ -1,14 +1,23 @@
 import { createApp } from "./app.js";
 import { env } from "./config/env.js";
-import { pool } from "./db/pool.js";
+import { closeDatabase, isEmbeddedDatabase } from "./db/pool.js";
+import { runMigrations } from "./db/migrations.js";
+import { seedDatabase } from "./db/seed.js";
 
-const app = createApp();
-
-const server = app.listen(env.PORT, () => {
-  console.log(`adfix-api listening on port ${env.PORT}`);
-});
-
+let server: ReturnType<ReturnType<typeof createApp>["listen"]> | undefined;
 let shuttingDown = false;
+
+async function start() {
+  if (isEmbeddedDatabase) {
+    await runMigrations();
+    await seedDatabase();
+  }
+
+  const app = createApp();
+  server = app.listen(env.PORT, () => {
+    console.log(`adfix-api listening on port ${env.PORT}`);
+  });
+}
 
 async function shutdown(signal: string) {
   if (shuttingDown) return;
@@ -16,9 +25,14 @@ async function shutdown(signal: string) {
 
   console.log(`Received ${signal}. Starting graceful shutdown...`);
 
+  if (!server) {
+    await closeDatabase();
+    process.exit(0);
+  }
+
   server.close(async () => {
     try {
-      await pool.end();
+      await closeDatabase();
       console.log("HTTP server and database pool closed.");
       process.exit(0);
     } catch (error) {
@@ -39,4 +53,10 @@ process.on("SIGINT", () => {
 
 process.on("SIGTERM", () => {
   void shutdown("SIGTERM");
+});
+
+start().catch(async (error) => {
+  console.error("API startup failed:", error);
+  await closeDatabase();
+  process.exitCode = 1;
 });

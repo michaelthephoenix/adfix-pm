@@ -1,4 +1,5 @@
 import { pool } from "../db/pool.js";
+import type { PoolClient } from "pg";
 
 export type TaskStatus = "pending" | "in_progress" | "completed" | "blocked";
 export type ProjectPhase =
@@ -9,9 +10,22 @@ export type ProjectPhase =
   | "delivery";
 export type PriorityLevel = "low" | "medium" | "high" | "urgent";
 
+export type TaskAssignee = {
+  id: string;
+  name: string;
+  avatar_url: string | null;
+};
+
+export type TaskLabel = {
+  id: string;
+  name: string;
+  color: "violet" | "blue" | "green" | "amber" | "rose" | "slate";
+};
+
 type TaskRow = {
   id: string;
   project_id: string;
+  project_name?: string;
   title: string;
   description: string | null;
   phase: ProjectPhase;
@@ -23,7 +37,115 @@ type TaskRow = {
   created_by: string;
   created_at: Date;
   updated_at: Date;
+  assignees: TaskAssignee[];
+  labels: TaskLabel[];
 };
+
+type TaskLabelInput = Pick<TaskLabel, "name" | "color">;
+
+async function hydrateTaskRelations(rows: TaskRow[]) {
+  if (rows.length === 0) return rows;
+
+  const taskIds = rows.map((row) => row.id);
+  const [assigneeResult, labelResult] = await Promise.all([
+    pool.query<{ task_id: string; id: string; name: string; avatar_url: string | null }>(
+      `SELECT ta.task_id, u.id, u.name, u.avatar_url
+       FROM task_assignees ta
+       JOIN users u ON u.id = ta.user_id
+       WHERE ta.task_id = ANY($1::uuid[])
+       ORDER BY ta.assigned_at ASC, u.name ASC`,
+      [taskIds]
+    ),
+    pool.query<{ task_id: string; id: string; name: string; color: TaskLabel["color"] }>(
+      `SELECT tla.task_id, label.id, label.name, label.color
+       FROM task_label_assignments tla
+       JOIN task_labels label ON label.id = tla.label_id
+       WHERE tla.task_id = ANY($1::uuid[])
+       ORDER BY lower(label.name) ASC`,
+      [taskIds]
+    )
+  ]);
+
+  const assigneesByTask = new Map<string, TaskAssignee[]>();
+  for (const row of assigneeResult.rows) {
+    const assignees = assigneesByTask.get(row.task_id) ?? [];
+    assignees.push({ id: row.id, name: row.name, avatar_url: row.avatar_url });
+    assigneesByTask.set(row.task_id, assignees);
+  }
+
+  const labelsByTask = new Map<string, TaskLabel[]>();
+  for (const row of labelResult.rows) {
+    const labels = labelsByTask.get(row.task_id) ?? [];
+    labels.push({ id: row.id, name: row.name, color: row.color });
+    labelsByTask.set(row.task_id, labels);
+  }
+
+  return rows.map((row) => {
+    const assignees = assigneesByTask.get(row.id) ?? [];
+    return {
+      ...row,
+      assigned_to: assignees[0]?.id ?? row.assigned_to,
+      assignees,
+      labels: labelsByTask.get(row.id) ?? []
+    };
+  });
+}
+
+async function syncTaskAssignees(client: PoolClient, input: {
+  taskId: string;
+  assigneeIds: string[];
+  assignedBy: string;
+}) {
+  const assigneeIds = [...new Set(input.assigneeIds)];
+  await client.query("DELETE FROM task_assignees WHERE task_id = $1", [input.taskId]);
+
+  for (const userId of assigneeIds) {
+    await client.query(
+      `INSERT INTO task_assignees (task_id, user_id, assigned_by)
+       VALUES ($1, $2, $3)`,
+      [input.taskId, userId, input.assignedBy]
+    );
+  }
+}
+
+async function syncTaskLabels(client: PoolClient, input: {
+  taskId: string;
+  projectId: string;
+  labels: TaskLabelInput[];
+  createdBy: string;
+}) {
+  await client.query("DELETE FROM task_label_assignments WHERE task_id = $1", [input.taskId]);
+  const labels = [...new Map(input.labels.map((label) => [label.name.trim().toLowerCase(), { ...label, name: label.name.trim() }])).values()];
+
+  for (const label of labels) {
+    const existing = await client.query<{ id: string }>(
+      `SELECT id
+       FROM task_labels
+       WHERE project_id = $1 AND lower(name) = lower($2)
+       LIMIT 1`,
+      [input.projectId, label.name]
+    );
+
+    let labelId = existing.rows[0]?.id;
+    if (labelId) {
+      await client.query("UPDATE task_labels SET color = $1 WHERE id = $2", [label.color, labelId]);
+    } else {
+      const created = await client.query<{ id: string }>(
+        `INSERT INTO task_labels (project_id, name, color, created_by)
+         VALUES ($1, $2, $3, $4)
+         RETURNING id`,
+        [input.projectId, label.name, label.color, input.createdBy]
+      );
+      labelId = created.rows[0].id;
+    }
+
+    await client.query(
+      `INSERT INTO task_label_assignments (task_id, label_id)
+       VALUES ($1, $2)`,
+      [input.taskId, labelId]
+    );
+  }
+}
 
 type ListTasksFilter = {
   projectId?: string;
@@ -86,7 +208,10 @@ export async function listTasks(filter: ListTasksFilter, userId: string) {
   }
   if (filter.assignedTo) {
     values.push(filter.assignedTo);
-    where.push(`t.assigned_to = $${values.length}`);
+    where.push(`EXISTS (
+      SELECT 1 FROM task_assignees ta
+      WHERE ta.task_id = t.id AND ta.user_id = $${values.length}
+    )`);
   }
   if (filter.status) {
     values.push(filter.status);
@@ -108,6 +233,7 @@ export async function listTasks(filter: ListTasksFilter, userId: string) {
   const dataQuery = `SELECT
        t.id,
        t.project_id,
+       project.name AS project_name,
        t.title,
        t.description,
        t.phase,
@@ -120,6 +246,7 @@ export async function listTasks(filter: ListTasksFilter, userId: string) {
        t.created_at,
        t.updated_at
      FROM tasks t
+     JOIN projects project ON project.id = t.project_id
      WHERE ${where.join(" AND ")}
      ORDER BY ${orderColumn} ${orderDirection}
      LIMIT $${values.length + 1}
@@ -135,7 +262,7 @@ export async function listTasks(filter: ListTasksFilter, userId: string) {
   ]);
 
   return {
-    rows: dataResult.rows,
+    rows: await hydrateTaskRelations(dataResult.rows),
     total: Number(countResult.rows[0]?.total ?? 0)
   };
 }
@@ -162,7 +289,8 @@ export async function getTaskById(taskId: string) {
     [taskId]
   );
 
-  return result.rows[0] ?? null;
+  const rows = await hydrateTaskRelations(result.rows);
+  return rows[0] ?? null;
 }
 
 export async function createTask(input: {
@@ -173,35 +301,58 @@ export async function createTask(input: {
   status?: TaskStatus;
   priority?: PriorityLevel;
   assignedTo?: string | null;
+  assigneeIds?: string[];
+  labels?: TaskLabelInput[];
   dueDate?: string | null;
   createdBy: string;
 }) {
-  const result = await pool.query<TaskRow>(
-    `INSERT INTO tasks (
-       project_id, title, description, phase, status, priority,
-       assigned_to, due_date, completed_at, created_by, created_at, updated_at
-     )
-     VALUES (
-       $1, $2, $3, $4, $5::task_status, $6,
-       $7, $8::date, CASE WHEN $5::task_status = 'completed' THEN NOW() ELSE NULL END, $9, NOW(), NOW()
-     )
-     RETURNING
-       id, project_id, title, description, phase, status, priority,
-       assigned_to, due_date, completed_at, created_by, created_at, updated_at`,
-    [
-      input.projectId,
-      input.title,
-      input.description ?? null,
-      input.phase,
-      input.status ?? "pending",
-      input.priority ?? "medium",
-      input.assignedTo ?? null,
-      input.dueDate ?? null,
-      input.createdBy
-    ]
-  );
+  const client = await pool.connect();
+  const assigneeIds = input.assigneeIds ?? (input.assignedTo ? [input.assignedTo] : []);
 
-  return result.rows[0];
+  try {
+    await client.query("BEGIN");
+    const result = await client.query<TaskRow>(
+      `INSERT INTO tasks (
+         project_id, title, description, phase, status, priority,
+         assigned_to, due_date, completed_at, created_by, created_at, updated_at
+       )
+       VALUES (
+         $1, $2, $3, $4, $5::task_status, $6,
+         $7, $8::date, CASE WHEN $5::task_status = 'completed' THEN NOW() ELSE NULL END, $9, NOW(), NOW()
+       )
+       RETURNING
+         id, project_id, title, description, phase, status, priority,
+         assigned_to, due_date, completed_at, created_by, created_at, updated_at`,
+      [
+        input.projectId,
+        input.title,
+        input.description ?? null,
+        input.phase,
+        input.status ?? "pending",
+        input.priority ?? "medium",
+        assigneeIds[0] ?? null,
+        input.dueDate ?? null,
+        input.createdBy
+      ]
+    );
+
+    const task = result.rows[0];
+    await syncTaskAssignees(client, { taskId: task.id, assigneeIds, assignedBy: input.createdBy });
+    await syncTaskLabels(client, {
+      taskId: task.id,
+      projectId: task.project_id,
+      labels: input.labels ?? [],
+      createdBy: input.createdBy
+    });
+    await client.query("COMMIT");
+
+    return (await getTaskById(task.id))!;
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 export async function updateTask(
@@ -213,9 +364,13 @@ export async function updateTask(
     phase?: ProjectPhase;
     priority?: PriorityLevel;
     assignedTo?: string | null;
+    assigneeIds?: string[];
+    labels?: TaskLabelInput[];
     dueDate?: string | null;
-  }
+  },
+  updatedBy?: string
 ) {
+  const client = await pool.connect();
   const fields: string[] = [];
   const values: Array<string | null> = [];
 
@@ -239,32 +394,73 @@ export async function updateTask(
     fields.push(`priority = $${fields.length + 1}`);
     values.push(input.priority);
   }
-  if (typeof input.assignedTo !== "undefined") {
+  const assigneeIds = input.assigneeIds ?? (typeof input.assignedTo !== "undefined" ? (input.assignedTo ? [input.assignedTo] : []) : undefined);
+  if (typeof assigneeIds !== "undefined") {
     fields.push(`assigned_to = $${fields.length + 1}`);
-    values.push(input.assignedTo);
+    values.push(assigneeIds[0] ?? null);
   }
   if (typeof input.dueDate !== "undefined") {
     fields.push(`due_date = $${fields.length + 1}::date`);
     values.push(input.dueDate);
   }
 
-  if (fields.length === 0) {
+  if (fields.length === 0 && typeof input.labels === "undefined") {
+    client.release();
     return getTaskById(taskId);
   }
 
-  fields.push("updated_at = NOW()");
+  try {
+    await client.query("BEGIN");
+    const result = fields.length > 0
+      ? await client.query<TaskRow>(
+        `UPDATE tasks
+         SET ${fields.join(", ")}, updated_at = NOW()
+         WHERE id = $${fields.length + 1} AND deleted_at IS NULL
+         RETURNING
+           id, project_id, title, description, phase, status, priority,
+           assigned_to, due_date, completed_at, created_by, created_at, updated_at`,
+        [...values, taskId]
+      )
+      : await client.query<TaskRow>(
+        `UPDATE tasks
+         SET updated_at = NOW()
+         WHERE id = $1 AND deleted_at IS NULL
+         RETURNING
+           id, project_id, title, description, phase, status, priority,
+           assigned_to, due_date, completed_at, created_by, created_at, updated_at`,
+        [taskId]
+      );
 
-  const result = await pool.query<TaskRow>(
-    `UPDATE tasks
-     SET ${fields.join(", ")}
-     WHERE id = $${fields.length} AND deleted_at IS NULL
-     RETURNING
-       id, project_id, title, description, phase, status, priority,
-       assigned_to, due_date, completed_at, created_by, created_at, updated_at`,
-    [...values, taskId]
-  );
+    const task = result.rows[0];
+    if (!task) {
+      await client.query("ROLLBACK");
+      return null;
+    }
 
-  return result.rows[0] ?? null;
+    if (assigneeIds) {
+      await syncTaskAssignees(client, {
+        taskId,
+        assigneeIds,
+        assignedBy: updatedBy ?? task.created_by
+      });
+    }
+    if (input.labels) {
+      await syncTaskLabels(client, {
+        taskId,
+        projectId: task.project_id,
+        labels: input.labels,
+        createdBy: updatedBy ?? task.created_by
+      });
+    }
+
+    await client.query("COMMIT");
+    return getTaskById(taskId);
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 export async function deleteTask(taskId: string) {
@@ -327,8 +523,9 @@ export async function transitionTaskStatus(input: {
     );
 
     await client.query("COMMIT");
+    const hydratedTask = await getTaskById(updatedTaskQuery.rows[0].id);
 
-    return { ok: true, task: updatedTaskQuery.rows[0] };
+    return { ok: true, task: hydratedTask! };
   } catch (error) {
     await client.query("ROLLBACK");
     throw error;

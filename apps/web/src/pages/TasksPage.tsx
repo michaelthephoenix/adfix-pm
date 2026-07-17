@@ -1,6 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
+import { FilterX } from "lucide-react";
+import { Button } from "../components/ui/Button";
+import { PageHeader } from "../components/ui/PageHeader";
 import { apiRequest } from "../lib/api";
 import { useAuth } from "../state/auth";
 import { useUI } from "../state/ui";
@@ -9,6 +12,7 @@ import { EmptyState, ErrorState, LoadingState } from "../components/States";
 type TaskRow = {
   id: string;
   project_id: string;
+  project_name: string;
   title: string;
   phase: string;
   status: "pending" | "in_progress" | "completed" | "blocked";
@@ -19,14 +23,10 @@ type TaskRow = {
 
 type TasksResponse = {
   data: TaskRow[];
-  meta: {
-    page: number;
-    pageSize: number;
-    sortBy: string;
-    sortOrder: string;
-    total: number;
-  };
+  meta: { page: number; pageSize: number; sortBy: string; sortOrder: string; total: number };
 };
+
+const humanize = (value: string) => value.replaceAll("_", " ").replace(/^./, (letter) => letter.toUpperCase());
 
 export function TasksPage() {
   const { accessToken } = useAuth();
@@ -44,258 +44,132 @@ export function TasksPage() {
   const [bulkAction, setBulkAction] = useState<"" | "start" | "complete" | "delete">("");
 
   const queryString = useMemo(() => {
-    const params = new URLSearchParams({
-      page: String(page),
-      pageSize: String(pageSize),
-      sortBy,
-      sortOrder
-    });
+    const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize), sortBy, sortOrder });
     if (status) params.set("status", status);
     if (phase) params.set("phase", phase);
     if (overdue) params.set("overdue", overdue);
     return params.toString();
-  }, [overdue, page, pageSize, phase, sortBy, sortOrder, status]);
+  }, [overdue, page, phase, sortBy, sortOrder, status]);
 
   const tasksQuery = useQuery({
     queryKey: ["tasks-global", queryString],
-    queryFn: () =>
-      apiRequest<TasksResponse>(`/tasks?${queryString}`, {
-        accessToken: accessToken ?? undefined
-      }),
+    queryFn: () => apiRequest<TasksResponse>(`/tasks?${queryString}`, { accessToken: accessToken ?? undefined }),
     enabled: Boolean(accessToken)
   });
 
   const refreshTasks = async () => {
     setSelectedTaskIds([]);
+    setBulkAction("");
     await queryClient.invalidateQueries({ queryKey: ["tasks-global"] });
   };
 
   const bulkStatusMutation = useMutation({
-    mutationFn: (nextStatus: TaskRow["status"]) =>
-      apiRequest("/tasks/bulk/status", {
-        method: "POST",
-        accessToken: accessToken ?? undefined,
-        body: {
-          taskIds: selectedTaskIds,
-          status: nextStatus
-        }
-      }),
-    onSuccess: async (_, nextStatus) => {
-      await refreshTasks();
-      ui.success(`Tasks updated to ${nextStatus}.`);
-    },
-    onError: () => {
-      ui.error("Could not update selected tasks.");
-    }
+    mutationFn: (nextStatus: TaskRow["status"]) => apiRequest("/tasks/bulk/status", { method: "POST", accessToken: accessToken ?? undefined, body: { taskIds: selectedTaskIds, status: nextStatus } }),
+    onSuccess: async (_, nextStatus) => { await refreshTasks(); ui.success(`Tasks updated to ${humanize(nextStatus).toLowerCase()}.`); },
+    onError: () => ui.error("Could not update selected tasks.")
   });
 
   const bulkDeleteMutation = useMutation({
-    mutationFn: () =>
-      apiRequest("/tasks/bulk/delete", {
-        method: "POST",
-        accessToken: accessToken ?? undefined,
-        body: {
-          taskIds: selectedTaskIds
-        }
-      }),
-    onSuccess: async () => {
-      await refreshTasks();
-      ui.success("Selected tasks deleted.");
-    },
-    onError: () => {
-      ui.error("Could not delete selected tasks.");
-    }
+    mutationFn: () => apiRequest("/tasks/bulk/delete", { method: "POST", accessToken: accessToken ?? undefined, body: { taskIds: selectedTaskIds } }),
+    onSuccess: async () => { await refreshTasks(); ui.success("Selected tasks deleted."); },
+    onError: () => ui.error("Could not delete selected tasks.")
   });
 
   const applyBulkAction = async () => {
     if (!bulkAction || selectedTaskIds.length === 0) return;
-
-    if (bulkAction === "start") {
-      bulkStatusMutation.mutate("in_progress");
-      return;
-    }
-
-    if (bulkAction === "complete") {
-      bulkStatusMutation.mutate("completed");
-      return;
-    }
-
-    const shouldDelete = await ui.confirm({
-      title: "Delete selected tasks",
-      message: `Delete ${selectedTaskIds.length} selected tasks? This cannot be undone.`,
-      confirmLabel: "Delete"
-    });
-    if (!shouldDelete) return;
-    bulkDeleteMutation.mutate();
+    if (bulkAction === "start") return bulkStatusMutation.mutate("in_progress");
+    if (bulkAction === "complete") return bulkStatusMutation.mutate("completed");
+    const confirmed = await ui.confirm({ title: "Delete selected tasks", message: `Delete ${selectedTaskIds.length} selected tasks? This cannot be undone.`, confirmLabel: "Delete" });
+    if (confirmed) bulkDeleteMutation.mutate();
   };
 
   const toggleTaskSelection = (taskId: string) => {
-    setSelectedTaskIds((previous) =>
-      previous.includes(taskId) ? previous.filter((id) => id !== taskId) : [...previous, taskId]
-    );
+    setSelectedTaskIds((current) => current.includes(taskId) ? current.filter((id) => id !== taskId) : [...current, taskId]);
   };
 
-  const setFilterParam = (
-    key: "status" | "phase" | "overdue" | "page" | "sortBy" | "sortOrder",
-    value: string
-  ) => {
+  const setFilterParam = (key: "status" | "phase" | "overdue" | "page", value: string) => {
     const next = new URLSearchParams(searchParams);
-    if (!value) {
-      next.delete(key);
-    } else {
-      next.set(key, value);
-    }
-    if (key !== "page") {
-      next.set("page", "1");
-    }
+    if (value) next.set(key, value); else next.delete(key);
+    if (key !== "page") next.set("page", "1");
+    setSearchParams(next, { replace: true });
+  };
+
+  const setSort = (value: string) => {
+    const [nextSortBy, nextSortOrder] = value.split(":");
+    const next = new URLSearchParams(searchParams);
+    next.set("sortBy", nextSortBy);
+    next.set("sortOrder", nextSortOrder);
+    next.set("page", "1");
     setSearchParams(next, { replace: true });
   };
 
   const clearFilters = () => {
-    setSearchParams(new URLSearchParams(), { replace: true });
+    const next = new URLSearchParams();
+    setSearchParams(next, { replace: true });
   };
 
-  const allVisibleSelected =
-    Boolean(tasksQuery.data?.data.length) &&
-    tasksQuery.data?.data.every((task) => selectedTaskIds.includes(task.id));
+  const allVisibleSelected = Boolean(tasksQuery.data?.data.length) && tasksQuery.data?.data.every((task) => selectedTaskIds.includes(task.id));
+  const hasFilters = Boolean(status || phase || overdue);
+  const isApplying = bulkDeleteMutation.isPending || bulkStatusMutation.isPending;
 
   return (
     <section>
-      <div className="section-head">
-        <h2>Tasks</h2>
-        <p className="muted">{tasksQuery.data?.meta.total ?? 0} tasks</p>
+      <PageHeader title="Tasks" description="Work across all projects, ordered by what needs attention." meta={<span>{tasksQuery.data?.meta.total ?? 0}</span>} />
+
+      <div className="list-toolbar task-filters">
+        <select aria-label="Filter by status" value={status} onChange={(event) => setFilterParam("status", event.target.value)}>
+          <option value="">All statuses</option><option value="pending">Pending</option><option value="in_progress">In progress</option><option value="blocked">Blocked</option><option value="completed">Completed</option>
+        </select>
+        <select aria-label="Filter by phase" value={phase} onChange={(event) => setFilterParam("phase", event.target.value)}>
+          <option value="">All phases</option><option value="client_acquisition">Acquisition</option><option value="strategy_planning">Strategy</option><option value="production">Production</option><option value="post_production">Post-production</option><option value="delivery">Delivery</option>
+        </select>
+        <select aria-label="Filter by due date" value={overdue} onChange={(event) => setFilterParam("overdue", event.target.value)}>
+          <option value="">Any due date</option><option value="true">Overdue</option><option value="false">Not overdue</option>
+        </select>
+        <span className="toolbar-spacer" />
+        {hasFilters ? <Button variant="ghost" size="sm" icon={<FilterX size={14} />} onClick={clearFilters}>Clear</Button> : null}
+        <select aria-label="Sort tasks" value={`${sortBy}:${sortOrder}`} onChange={(event) => setSort(event.target.value)}>
+          <option value="updatedAt:desc">Recently updated</option><option value="dueDate:asc">Due date</option><option value="priority:desc">Priority</option><option value="title:asc">Title A–Z</option>
+        </select>
       </div>
 
-      <div className="card tasks-toolbar">
-        <select value={status} onChange={(event) => setFilterParam("status", event.target.value)}>
-          <option value="">All statuses</option>
-          <option value="pending">pending</option>
-          <option value="in_progress">in_progress</option>
-          <option value="completed">completed</option>
-          <option value="blocked">blocked</option>
-        </select>
-        <select value={phase} onChange={(event) => setFilterParam("phase", event.target.value)}>
-          <option value="">All phases</option>
-          <option value="client_acquisition">client_acquisition</option>
-          <option value="strategy_planning">strategy_planning</option>
-          <option value="production">production</option>
-          <option value="post_production">post_production</option>
-          <option value="delivery">delivery</option>
-        </select>
-        <select value={overdue} onChange={(event) => setFilterParam("overdue", event.target.value)}>
-          <option value="">Any due state</option>
-          <option value="true">overdue only</option>
-          <option value="false">not overdue</option>
-        </select>
-        <select value={sortBy} onChange={(event) => setFilterParam("sortBy", event.target.value)}>
-          <option value="updatedAt">Sort: updatedAt</option>
-          <option value="createdAt">Sort: createdAt</option>
-          <option value="dueDate">Sort: dueDate</option>
-          <option value="priority">Sort: priority</option>
-          <option value="status">Sort: status</option>
-          <option value="title">Sort: title</option>
-        </select>
-        <select value={sortOrder} onChange={(event) => setFilterParam("sortOrder", event.target.value)}>
-          <option value="desc">desc</option>
-          <option value="asc">asc</option>
-        </select>
-        <select value={bulkAction} onChange={(event) => setBulkAction(event.target.value as "" | "start" | "complete" | "delete")}>
-          <option value="">Select action</option>
-          <option value="start">Start selected</option>
-          <option value="complete">Complete selected</option>
-          <option value="delete">Delete selected</option>
-        </select>
-        <button
-          className="ghost-button"
-          disabled={
-            selectedTaskIds.length === 0 ||
-            !bulkAction ||
-            bulkDeleteMutation.isPending ||
-            bulkStatusMutation.isPending
-          }
-          onClick={applyBulkAction}
-        >
-          {bulkDeleteMutation.isPending || bulkStatusMutation.isPending ? "Applying..." : "Apply"}
-        </button>
-        <button type="button" className="ghost-button" onClick={clearFilters}>
-          Clear filters
-        </button>
-        <p className="muted">{selectedTaskIds.length} selected</p>
-      </div>
+      {selectedTaskIds.length > 0 ? (
+        <div className="selection-toolbar" role="region" aria-label="Selected task actions">
+          <strong>{selectedTaskIds.length} selected</strong>
+          <select aria-label="Bulk action" value={bulkAction} onChange={(event) => setBulkAction(event.target.value as typeof bulkAction)}>
+            <option value="">Choose action</option><option value="start">Start</option><option value="complete">Complete</option><option value="delete">Delete</option>
+          </select>
+          <Button variant={bulkAction === "delete" ? "danger" : "primary"} size="sm" disabled={!bulkAction || isApplying} onClick={() => void applyBulkAction()}>{isApplying ? "Applying…" : "Apply"}</Button>
+          <Button variant="ghost" size="sm" onClick={() => setSelectedTaskIds([])}>Cancel</Button>
+        </div>
+      ) : null}
 
-      <div className="card table-wrap">
-        {tasksQuery.isLoading ? (
-          <LoadingState message="Loading tasks..." />
-        ) : tasksQuery.isError ? (
-          <ErrorState message="Could not load tasks." onRetry={() => void tasksQuery.refetch()} />
-        ) : (tasksQuery.data?.data.length ?? 0) === 0 ? (
-          <EmptyState message="No tasks found for current filters." />
-        ) : (
-          <>
+      <div className="data-view mobile-card-table tasks-data-view">
+        {tasksQuery.isLoading ? <LoadingState message="Loading tasks…" />
+          : tasksQuery.isError ? <ErrorState message="Could not load tasks." onRetry={() => void tasksQuery.refetch()} />
+          : (tasksQuery.data?.data.length ?? 0) === 0 ? <EmptyState message={hasFilters ? "No tasks match these filters." : "No tasks have been created yet."} />
+          : (
             <table>
-              <thead>
-                <tr>
-                  <th>
-                    <input
-                      type="checkbox"
-                      checked={Boolean(allVisibleSelected)}
-                      onChange={() =>
-                        setSelectedTaskIds(
-                          allVisibleSelected ? [] : (tasksQuery.data?.data.map((task) => task.id) ?? [])
-                        )
-                      }
-                    />
-                  </th>
-                  <th>Title</th>
-                  <th>Status</th>
-                  <th>Phase</th>
-                  <th>Priority</th>
-                  <th>Due</th>
-                  <th>Project</th>
-                </tr>
-              </thead>
+              <thead><tr><th className="checkbox-cell"><input aria-label="Select all visible tasks" type="checkbox" checked={allVisibleSelected} onChange={() => setSelectedTaskIds(allVisibleSelected ? [] : tasksQuery.data?.data.map((task) => task.id) ?? [])} /></th><th>Task</th><th>Status</th><th>Phase</th><th>Priority</th><th>Due</th></tr></thead>
               <tbody>
                 {tasksQuery.data?.data.map((task) => (
                   <tr key={task.id}>
-                    <td>
-                      <input
-                        type="checkbox"
-                        checked={selectedTaskIds.includes(task.id)}
-                        onChange={() => toggleTaskSelection(task.id)}
-                      />
-                    </td>
-                    <td>{task.title}</td>
-                    <td>{task.status}</td>
-                    <td>{task.phase}</td>
-                    <td>{task.priority}</td>
-                    <td>{task.due_date ?? "-"}</td>
-                    <td className="mono-cell">{task.project_id}</td>
+                    <td className="checkbox-cell"><input aria-label={`Select ${task.title}`} type="checkbox" checked={selectedTaskIds.includes(task.id)} onChange={() => toggleTaskSelection(task.id)} /></td>
+                    <td><span className="row-title">{task.title}</span><Link className="row-subtitle" to={`/projects/${task.project_id}`}>{task.project_name}</Link></td>
+                    <td><span className={`status-chip status-${task.status}`}>{humanize(task.status)}</span></td>
+                    <td>{humanize(task.phase)}</td>
+                    <td><span className={`priority-dot priority-${task.priority}`} />{humanize(task.priority)}</td>
+                    <td className={task.due_date && new Date(task.due_date) < new Date() && task.status !== "completed" ? "deadline-overdue" : ""}>{task.due_date ? new Date(task.due_date).toLocaleDateString() : "—"}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-            <div className="inline-actions" style={{ marginTop: "10px" }}>
-              <button
-                type="button"
-                className="ghost-button"
-                disabled={page <= 1}
-                onClick={() => setFilterParam("page", String(Math.max(1, page - 1)))}
-              >
-                Previous
-              </button>
-              <p className="muted">Page {page}</p>
-              <button
-                type="button"
-                className="ghost-button"
-                disabled={(tasksQuery.data?.data.length ?? 0) < pageSize}
-                onClick={() => setFilterParam("page", String(page + 1))}
-              >
-                Next
-              </button>
-            </div>
-          </>
-        )}
+          )}
       </div>
+
+      {(tasksQuery.data?.meta.total ?? 0) > pageSize ? (
+        <div className="pagination"><Button size="sm" disabled={page <= 1} onClick={() => setFilterParam("page", String(Math.max(1, page - 1)))}>Previous</Button><span>Page {page}</span><Button size="sm" disabled={(tasksQuery.data?.data.length ?? 0) < pageSize} onClick={() => setFilterParam("page", String(page + 1))}>Next</Button></div>
+      ) : null}
     </section>
   );
 }

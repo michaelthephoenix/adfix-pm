@@ -26,11 +26,28 @@ export function requireAuth(req: AuthenticatedRequest, res: Response, next: Next
       id: payload.userId,
       email: payload.email,
       name: payload.name,
-      isAdmin: payload.isAdmin
+      isAdmin: payload.isAdmin,
+      accountType: payload.accountType
     };
 
     return next();
   } catch {
     return sendUnauthorized(res, "Invalid or expired token");
   }
+}
+
+export function requireStaff(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+  if (!req.user) return sendUnauthorized(res, "Unauthorized");
+  if (req.user.accountType !== "staff") {
+    return res.status(403).json({ code: "FORBIDDEN", error: "Staff access required" });
+  }
+  return next();
+}
+
+export function requireClient(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+  if (!req.user) return sendUnauthorized(res, "Unauthorized");
+  if (req.user.accountType !== "client") {
+    return res.status(403).json({ code: "FORBIDDEN", error: "Client access required" });
+  }
+  return next();
 }

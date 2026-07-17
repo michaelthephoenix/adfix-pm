@@ -37,7 +37,12 @@ const projectPhaseEnum = z.enum([
 
 const taskStatusEnum = z.enum(["pending", "in_progress", "completed", "blocked"]);
 const priorityEnum = z.enum(["low", "medium", "high", "urgent"]);
+const taskLabelColorEnum = z.enum(["violet", "blue", "green", "amber", "rose", "slate"]);
 const isoDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Must be YYYY-MM-DD");
+const taskLabelSchema = z.object({
+  name: z.string().trim().min(1).max(50),
+  color: taskLabelColorEnum
+});
 
 const listTasksQuerySchema = z.object({
   projectId: z.string().uuid().optional(),
@@ -59,6 +64,8 @@ const taskCreateSchema = z.object({
   status: taskStatusEnum.optional(),
   priority: priorityEnum.optional(),
   assignedTo: z.string().uuid().optional().nullable(),
+  assigneeIds: z.array(z.string().uuid()).max(20).optional(),
+  labels: z.array(taskLabelSchema).max(12).optional(),
   dueDate: isoDateSchema.optional().nullable()
 });
 
@@ -505,9 +512,9 @@ tasksRouter.post("/", async (req: AuthenticatedRequest, res) => {
     details: { taskId: task.id, status: task.status }
   });
 
-  if (task.assigned_to && task.assigned_to !== req.user.id) {
+  for (const assignee of task.assignees.filter((candidate) => candidate.id !== req.user!.id)) {
     await createNotification({
-      userId: task.assigned_to,
+      userId: assignee.id,
       projectId: task.project_id,
       taskId: task.id,
       type: "task_assigned",
@@ -558,7 +565,7 @@ tasksRouter.put("/:id", async (req: AuthenticatedRequest, res) => {
     });
   }
 
-  const task = await updateTask(parsedParams.data.id, parsed.data);
+  const task = await updateTask(parsedParams.data.id, parsed.data, req.user.id);
   if (!task) {
     return sendNotFound(res, "Task not found");
   }
@@ -570,12 +577,14 @@ tasksRouter.put("/:id", async (req: AuthenticatedRequest, res) => {
     details: { taskId: task.id, updatedFields: Object.keys(parsed.data) }
   });
 
-  const assignmentChanged =
-    typeof parsed.data.assignedTo !== "undefined" && parsed.data.assignedTo !== existingTask.assigned_to;
+  const previousAssigneeIds = new Set(existingTask.assignees.map((assignee) => assignee.id));
+  const addedAssignees = task.assignees.filter(
+    (assignee) => !previousAssigneeIds.has(assignee.id) && assignee.id !== req.user!.id
+  );
 
-  if (assignmentChanged && task.assigned_to && task.assigned_to !== req.user.id) {
+  for (const assignee of addedAssignees) {
     await createNotification({
-      userId: task.assigned_to,
+      userId: assignee.id,
       projectId: task.project_id,
       taskId: task.id,
       type: "task_assigned",

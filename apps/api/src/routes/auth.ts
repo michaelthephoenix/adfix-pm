@@ -13,6 +13,7 @@ import type { AuthenticatedRequest } from "../types/http.js";
 import { verifyRefreshToken } from "../utils/tokens.js";
 import { sendConflict, sendUnauthorized } from "../utils/http-error.js";
 import { sendValidationError } from "../utils/validation.js";
+import { clearRefreshCookie, readRefreshToken, setRefreshCookie } from "../utils/auth-cookie.js";
 
 export const authRouter = Router();
 
@@ -28,8 +29,8 @@ const signupSchema = z.object({
 });
 
 const refreshSchema = z.object({
-  refreshToken: z.string().min(1)
-});
+  refreshToken: z.string().min(1).optional()
+}).default({});
 
 authRouter.post("/login", async (req, res) => {
   const parsed = loginSchema.safeParse(req.body);
@@ -58,6 +59,8 @@ authRouter.post("/login", async (req, res) => {
     },
     projectId: null
   });
+
+  setRefreshCookie(res, result.refreshToken);
 
   return res.status(200).json(result);
 });
@@ -91,6 +94,8 @@ authRouter.post("/signup", async (req, res) => {
     projectId: null
   });
 
+  setRefreshCookie(res, result.refreshToken);
+
   return res.status(201).json(result);
 });
 
@@ -100,8 +105,11 @@ authRouter.post("/refresh", async (req, res) => {
     return sendValidationError(res, "Invalid refresh payload", parsed.error);
   }
 
+  const refreshToken = readRefreshToken(req);
+  if (!refreshToken) return sendUnauthorized(res, "Missing refresh token");
+
   const result = await refreshAuthToken({
-    refreshToken: parsed.data.refreshToken,
+    refreshToken,
     userAgent: req.header("user-agent"),
     ipAddress: req.ip
   });
@@ -120,6 +128,8 @@ authRouter.post("/refresh", async (req, res) => {
     projectId: null
   });
 
+  setRefreshCookie(res, result.refreshToken);
+
   return res.status(200).json(result);
 });
 
@@ -129,13 +139,16 @@ authRouter.post("/logout", async (req, res) => {
     return sendValidationError(res, "Invalid logout payload", parsed.error);
   }
 
+  const refreshToken = readRefreshToken(req);
+  if (!refreshToken) return sendUnauthorized(res, "Missing refresh token");
+
   try {
-    const decoded = verifyRefreshToken(parsed.data.refreshToken);
+    const decoded = verifyRefreshToken(refreshToken);
     if (decoded.tokenType !== "refresh") {
       return sendUnauthorized(res, "Invalid refresh token");
     }
 
-    await revokeSessionByRefreshToken(parsed.data.refreshToken);
+    await revokeSessionByRefreshToken(refreshToken);
 
     await insertActivityLog({
       userId: decoded.userId,
@@ -151,6 +164,8 @@ authRouter.post("/logout", async (req, res) => {
     return sendUnauthorized(res, "Invalid refresh token");
   }
 
+  clearRefreshCookie(res);
+
   return res.status(204).send();
 });
 
@@ -160,13 +175,16 @@ authRouter.post("/logout-all", async (req, res) => {
     return sendValidationError(res, "Invalid logout payload", parsed.error);
   }
 
+  const refreshToken = readRefreshToken(req);
+  if (!refreshToken) return sendUnauthorized(res, "Missing refresh token");
+
   try {
-    const decoded = verifyRefreshToken(parsed.data.refreshToken);
+    const decoded = verifyRefreshToken(refreshToken);
     if (decoded.tokenType !== "refresh") {
       return sendUnauthorized(res, "Invalid refresh token");
     }
 
-    await revokeAllUserSessionsByRefreshToken(parsed.data.refreshToken);
+    await revokeAllUserSessionsByRefreshToken(refreshToken);
 
     await insertActivityLog({
       userId: decoded.userId,
@@ -180,6 +198,8 @@ authRouter.post("/logout-all", async (req, res) => {
   } catch {
     return sendUnauthorized(res, "Invalid refresh token");
   }
+
+  clearRefreshCookie(res);
 
   return res.status(204).send();
 });

@@ -2,6 +2,9 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { FormEvent, useEffect, useState } from "react";
 import { apiRequest, ApiError } from "../lib/api";
 import { useAuth } from "../state/auth";
+import { Button } from "../components/ui/Button";
+import { PageHeader } from "../components/ui/PageHeader";
+import { Panel } from "../components/ui/Panel";
 
 type UserProfileResponse = {
   data: {
@@ -75,11 +78,9 @@ export function SettingsPage() {
 
   return (
     <section>
-      <div className="section-head">
-        <h2>Settings</h2>
-      </div>
-      <form className="card task-create-form" onSubmit={onSubmit}>
-        <h3>Profile</h3>
+      <PageHeader title="Profile" description="Your name and avatar across the workspace." />
+      <Panel className="settings-panel">
+      <form className="ui-form settings-form" onSubmit={onSubmit}>
         {profileQuery.isLoading ? <p>Loading profile...</p> : null}
         {profileQuery.isError ? <p className="error-text">Could not load profile.</p> : null}
         <label className="field">
@@ -94,12 +95,11 @@ export function SettingsPage() {
             onChange={(event) => setAvatarUrl(event.target.value)}
           />
         </label>
-        <button className="primary-button" type="submit" disabled={updateProfileMutation.isPending}>
-          Save profile
-        </button>
+        <div><Button variant="primary" type="submit" disabled={updateProfileMutation.isPending}>{updateProfileMutation.isPending ? "Saving…" : "Save changes"}</Button></div>
         {error ? <p className="error-text">{error}</p> : null}
         {success ? <p className="muted">{success}</p> : null}
       </form>
+      </Panel>
     </section>
   );
 }

@@ -1,6 +1,9 @@
 import { Router } from "express";
 import crypto from "node:crypto";
+import multer from "multer";
+import { stat } from "node:fs/promises";
 import { z } from "zod";
+import { env } from "../config/env.js";
 import { requireAuth } from "../middleware/auth.js";
 import type { AuthenticatedRequest } from "../types/http.js";
 import { insertActivityLog } from "../services/activity-log.service.js";
@@ -14,10 +17,39 @@ import {
 import { getProjectById } from "../services/projects.service.js";
 import { hasProjectPermission } from "../services/rbac.service.js";
 import { logAndSendForbidden } from "../utils/authz.js";
-import { sendNotFound, sendUnauthorized } from "../utils/http-error.js";
+import { sendError, sendNotFound, sendUnauthorized } from "../utils/http-error.js";
 import { sendValidationError } from "../utils/validation.js";
+import { storageProvider } from "../storage/local-storage.js";
+import { userHasClientProjectAccess } from "../services/client-portal.service.js";
+import { pool } from "../db/pool.js";
 
 export const filesRouter = Router();
+
+const allowedMimeTypes = new Set([
+  "application/pdf",
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+  "image/gif",
+  "video/mp4",
+  "video/quicktime",
+  "application/zip",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "text/plain"
+]);
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: env.MAX_UPLOAD_BYTES, files: 1 },
+  fileFilter: (_req, file, callback) => {
+    if (allowedMimeTypes.has(file.mimetype)) {
+      callback(null, true);
+    } else {
+      callback(new Error("Unsupported file type"));
+    }
+  }
+});
 
 const fileTypeEnum = z.enum([
   "client_profile",
@@ -99,6 +131,66 @@ function buildMockSignedDownloadUrl(objectKey: string, expiresAt: Date) {
 }
 
 filesRouter.use(requireAuth);
+
+filesRouter.post("/upload-binary", upload.single("file"), async (req: AuthenticatedRequest, res) => {
+  if (!req.user) return sendUnauthorized(res, "Unauthorized");
+  if (req.user.accountType !== "staff") return res.status(403).json({ code: "FORBIDDEN", error: "Staff access required" });
+  const parsed = z.object({ projectId: z.string().uuid(), fileType: fileTypeEnum }).safeParse(req.body);
+  if (!parsed.success) return sendValidationError(res, "Invalid upload metadata", parsed.error);
+  if (!req.file) return sendError(res, 400, "VALIDATION_ERROR", "A file is required");
+
+  const project = await getProjectById(parsed.data.projectId);
+  if (!project) return sendNotFound(res, "Project not found");
+  const allowed = await hasProjectPermission({ projectId: project.id, userId: req.user.id, permission: "file:write" });
+  if (!allowed) return logAndSendForbidden({ req, res, permission: "file:write", projectId: project.id });
+
+  const stored = await storageProvider.save({ buffer: req.file.buffer, fileName: req.file.originalname });
+  try {
+    const file = await createUploadedFile({
+      projectId: project.id,
+      fileName: req.file.originalname,
+      fileType: parsed.data.fileType,
+      storageType: "local",
+      objectKey: stored.objectKey,
+      mimeType: req.file.mimetype,
+      fileSize: stored.size,
+      checksumSha256: stored.checksumSha256,
+      uploadedBy: req.user.id
+    });
+    await insertActivityLog({ userId: req.user.id, projectId: project.id, action: "file_uploaded", details: { fileId: file.id } });
+    return res.status(201).json({ data: file });
+  } catch (error) {
+    await storageProvider.delete(stored.objectKey);
+    throw error;
+  }
+});
+
+filesRouter.get("/:id/content", async (req: AuthenticatedRequest, res) => {
+  if (!req.user) return sendUnauthorized(res, "Unauthorized");
+  const parsed = fileParamsSchema.safeParse(req.params);
+  if (!parsed.success) return sendValidationError(res, "Invalid file id", parsed.error);
+  const file = await getFileById(parsed.data.id);
+  if (!file) return sendNotFound(res, "File not found");
+
+  let allowed = await hasProjectPermission({ projectId: file.project_id, userId: req.user.id, permission: "project:view" });
+  if (!allowed && req.user.accountType === "client") {
+    const isDeliverable = await pool.query<{ allowed: boolean }>(
+      `SELECT EXISTS (SELECT 1 FROM deliverable_versions WHERE file_id = $1) AS allowed`,
+      [file.id]
+    );
+    allowed = isDeliverable.rows[0]?.allowed === true && await userHasClientProjectAccess(req.user.id, file.project_id);
+  }
+  if (!allowed) return logAndSendForbidden({ req, res, permission: "project:view", projectId: file.project_id });
+  if (file.external_url) return res.redirect(file.external_url);
+  if (file.storage_type !== "local") return sendNotFound(res, "File content is unavailable locally");
+
+  const filePath = await storageProvider.resolve(file.object_key);
+  await stat(filePath);
+  res.setHeader("Content-Type", file.mime_type);
+  res.setHeader("Content-Length", file.file_size);
+  res.setHeader("Content-Disposition", `attachment; filename*=UTF-8''${encodeURIComponent(file.file_name)}`);
+  return res.sendFile(filePath);
+});
 
 filesRouter.get("/project/:projectId", async (req: AuthenticatedRequest, res) => {
   if (!req.user) {
@@ -411,6 +503,10 @@ filesRouter.delete("/:id", async (req: AuthenticatedRequest, res) => {
   const deleted = await deleteFile(parsed.data.id);
   if (!deleted) {
     return sendNotFound(res, "File not found");
+  }
+
+  if (existingFile.storage_type === "local") {
+    await storageProvider.delete(existingFile.object_key);
   }
 
   await insertActivityLog({

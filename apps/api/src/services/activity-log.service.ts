@@ -5,11 +5,12 @@ export async function insertActivityLog(input: {
   action: string;
   details?: Record<string, unknown>;
   projectId?: string | null;
+  clientVisible?: boolean;
 }) {
   await pool.query(
-    `INSERT INTO activity_log (project_id, user_id, action, details, created_at)
-     VALUES ($1, $2, $3, $4::jsonb, NOW())`,
-    [input.projectId ?? null, input.userId, input.action, JSON.stringify(input.details ?? {})]
+    `INSERT INTO activity_log (project_id, user_id, action, details, client_visible, created_at)
+     VALUES ($1, $2, $3, $4::jsonb, $5, NOW())`,
+    [input.projectId ?? null, input.userId, input.action, JSON.stringify(input.details ?? {}), input.clientVisible ?? false]
   );
 }
 

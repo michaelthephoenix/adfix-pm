@@ -1,10 +1,11 @@
 import { Router } from "express";
 import { z } from "zod";
-import { requireAuth } from "../middleware/auth.js";
+import { requireAuth, requireStaff } from "../middleware/auth.js";
 import { requireAdmin } from "../middleware/admin.js";
 import type { AuthenticatedRequest } from "../types/http.js";
 import { insertActivityLog } from "../services/activity-log.service.js";
 import {
+  createStaffUser,
   getUserById,
   listAuditLogs,
   listUsers,
@@ -26,6 +27,13 @@ const usersListQuerySchema = z.object({
   pageSize: z.coerce.number().int().min(1).max(100).optional().default(20),
   sortBy: z.enum(["createdAt", "updatedAt", "name", "email", "lastLoginAt"]).optional().default("createdAt"),
   sortOrder: z.enum(["asc", "desc"]).optional().default("asc")
+});
+
+const createStaffUserSchema = z.object({
+  email: z.string().trim().email(),
+  name: z.string().trim().min(1).max(255),
+  password: z.string().min(8).max(128),
+  isAdmin: z.boolean().optional().default(false)
 });
 
 const auditLogsQuerySchema = z.object({
@@ -60,7 +68,7 @@ const resetRolesSchema = z.object({
 
 usersRouter.use(requireAuth);
 
-usersRouter.get("/", async (req, res) => {
+usersRouter.get("/", requireStaff, async (req, res) => {
   const parsedQuery = usersListQuerySchema.safeParse(req.query);
   if (!parsedQuery.success) {
     return sendValidationError(res, "Invalid users query", parsedQuery.error);
@@ -77,6 +85,30 @@ usersRouter.get("/", async (req, res) => {
       total: result.total
     }
   });
+});
+
+usersRouter.post("/", requireAdmin, async (req: AuthenticatedRequest, res) => {
+  if (!req.user) return sendUnauthorized(res, "Unauthorized");
+  const parsedBody = createStaffUserSchema.safeParse(req.body);
+  if (!parsedBody.success) {
+    return sendValidationError(res, "Invalid staff account payload", parsedBody.error);
+  }
+
+  const createdUser = await createStaffUser(parsedBody.data);
+  if (createdUser === "email_taken") return sendConflict(res, "Email is already registered");
+
+  await insertActivityLog({
+    userId: req.user.id,
+    action: "staff_user_created",
+    projectId: null,
+    details: {
+      targetUserId: createdUser.id,
+      email: createdUser.email,
+      isAdmin: createdUser.is_admin
+    }
+  });
+
+  return res.status(201).json({ data: createdUser });
 });
 
 usersRouter.get("/audit-logs", requireAdmin, async (req, res) => {
@@ -98,10 +130,14 @@ usersRouter.get("/audit-logs", requireAdmin, async (req, res) => {
   });
 });
 
-usersRouter.get("/:id", async (req, res) => {
+usersRouter.get("/:id", async (req: AuthenticatedRequest, res) => {
   const parsedParams = idParamsSchema.safeParse(req.params);
   if (!parsedParams.success) {
     return sendValidationError(res, "Invalid user id", parsedParams.error);
+  }
+
+  if (!req.user || (req.user.accountType !== "staff" && req.user.id !== parsedParams.data.id)) {
+    return sendForbidden(res, "You can only view your own profile");
   }
 
   const user = await getUserById(parsedParams.data.id);

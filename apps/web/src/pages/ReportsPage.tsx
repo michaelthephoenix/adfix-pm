@@ -1,211 +1,87 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Download } from "lucide-react";
+import { Button } from "../components/ui/Button";
+import { PageHeader } from "../components/ui/PageHeader";
 import { apiRequest } from "../lib/api";
 import { useAuth } from "../state/auth";
 import { EmptyState, ErrorState, LoadingState } from "../components/States";
 
-type ProjectsAnalyticsResponse = {
-  data: Array<{
-    projectId: string;
-    projectName: string;
-    currentPhase: string;
-    totalTasks: number;
-    completedTasks: number;
-    completionRatePct: number;
-  }>;
-};
+type ProjectsAnalyticsResponse = { data: Array<{ projectId: string; projectName: string; currentPhase: string; totalTasks: number; completedTasks: number; completionRatePct: number }> };
+type TeamAnalyticsResponse = { data: Array<{ userId: string; userName: string; userEmail: string; totalTasks: number; completedTasks: number; overdueTasks: number }> };
+type TimelineAnalyticsResponse = { data: Array<{ projectId: string; projectName: string; currentPhase: string; startDate: string; deadline: string; daysRemaining: number }> };
+type ReportView = "projects" | "team" | "timeline";
 
-type TeamAnalyticsResponse = {
-  data: Array<{
-    userId: string;
-    userName: string;
-    userEmail: string;
-    totalTasks: number;
-    completedTasks: number;
-    overdueTasks: number;
-  }>;
-};
-
-type TimelineAnalyticsResponse = {
-  data: Array<{
-    projectId: string;
-    projectName: string;
-    currentPhase: string;
-    startDate: string;
-    deadline: string;
-    daysRemaining: number;
-  }>;
-};
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:4000/api/v1";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "/api/v1";
+const humanize = (value: string) => value.replaceAll("_", " ").replace(/^./, (letter) => letter.toUpperCase());
 
 export function ReportsPage() {
   const { accessToken } = useAuth();
+  const [activeView, setActiveView] = useState<ReportView>("projects");
 
   const projectsQuery = useQuery({
     queryKey: ["reports-projects"],
-    queryFn: () =>
-      apiRequest<ProjectsAnalyticsResponse>("/analytics/projects", {
-        accessToken: accessToken ?? undefined
-      }),
-    enabled: Boolean(accessToken)
+    queryFn: () => apiRequest<ProjectsAnalyticsResponse>("/analytics/projects", { accessToken: accessToken ?? undefined }),
+    enabled: Boolean(accessToken && activeView === "projects")
   });
-
   const teamQuery = useQuery({
     queryKey: ["reports-team"],
-    queryFn: () =>
-      apiRequest<TeamAnalyticsResponse>("/analytics/team", {
-        accessToken: accessToken ?? undefined
-      }),
-    enabled: Boolean(accessToken)
+    queryFn: () => apiRequest<TeamAnalyticsResponse>("/analytics/team", { accessToken: accessToken ?? undefined }),
+    enabled: Boolean(accessToken && activeView === "team")
   });
-
   const timelineQuery = useQuery({
     queryKey: ["reports-timeline"],
-    queryFn: () =>
-      apiRequest<TimelineAnalyticsResponse>("/analytics/timeline", {
-        accessToken: accessToken ?? undefined
-      }),
-    enabled: Boolean(accessToken)
+    queryFn: () => apiRequest<TimelineAnalyticsResponse>("/analytics/timeline", { accessToken: accessToken ?? undefined }),
+    enabled: Boolean(accessToken && activeView === "timeline")
   });
 
-  const openCsv = async (path: "/analytics/projects.csv" | "/analytics/team.csv") => {
+  const downloadCsv = async (path: "/analytics/projects.csv" | "/analytics/team.csv") => {
     if (!accessToken) return;
-
-    const response = await fetch(`${API_BASE_URL}${path}`, {
-      headers: {
-        authorization: `Bearer ${accessToken}`
-      }
-    });
-
-    const text = await response.text();
-    const blob = new Blob([text], { type: "text/csv;charset=utf-8" });
+    const response = await fetch(`${API_BASE_URL}${path}`, { headers: { authorization: `Bearer ${accessToken}` } });
+    const blob = new Blob([await response.text()], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = path === "/analytics/projects.csv" ? "projects-analytics.csv" : "team-analytics.csv";
-    document.body.appendChild(anchor);
+    anchor.download = path.includes("projects") ? "project-performance.csv" : "team-throughput.csv";
     anchor.click();
-    anchor.remove();
     URL.revokeObjectURL(url);
   };
 
+  const exportAction = activeView === "timeline" ? null : (
+    <Button icon={<Download size={14} />} onClick={() => void downloadCsv(activeView === "projects" ? "/analytics/projects.csv" : "/analytics/team.csv")}>Export CSV</Button>
+  );
+
   return (
     <section>
-      <div className="section-head">
-        <h2>Reports</h2>
-        <div className="inline-actions">
-          <button className="ghost-button" onClick={() => openCsv("/analytics/projects.csv")}>
-            Export Projects CSV
-          </button>
-          <button className="ghost-button" onClick={() => openCsv("/analytics/team.csv")}>
-            Export Team CSV
-          </button>
-        </div>
+      <PageHeader title="Reports" description="Performance, workload, and delivery timing." actions={exportAction} />
+
+      <div className="segmented-control" role="tablist" aria-label="Report view">
+        <button type="button" role="tab" aria-selected={activeView === "projects"} onClick={() => setActiveView("projects")}>Projects</button>
+        <button type="button" role="tab" aria-selected={activeView === "team"} onClick={() => setActiveView("team")}>Team</button>
+        <button type="button" role="tab" aria-selected={activeView === "timeline"} onClick={() => setActiveView("timeline")}>Timeline</button>
       </div>
 
-      <div className="card table-wrap">
-        <h3>Project Performance</h3>
-        {projectsQuery.isLoading ? (
-          <LoadingState message="Loading project analytics..." />
-        ) : projectsQuery.isError ? (
-          <ErrorState
-            message="Could not load project analytics."
-            onRetry={() => void projectsQuery.refetch()}
-          />
-        ) : (projectsQuery.data?.data.length ?? 0) === 0 ? (
-          <EmptyState message="No project analytics available yet." />
-        ) : (
-          <table>
-            <thead>
-              <tr>
-                <th>Project</th>
-                <th>Phase</th>
-                <th>Total Tasks</th>
-                <th>Completed</th>
-                <th>Completion %</th>
-              </tr>
-            </thead>
-            <tbody>
-              {projectsQuery.data?.data.map((row) => (
-                <tr key={row.projectId}>
-                  <td>{row.projectName}</td>
-                  <td>{row.currentPhase}</td>
-                  <td>{row.totalTasks}</td>
-                  <td>{row.completedTasks}</td>
-                  <td>{row.completionRatePct.toFixed(2)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+      <div className="data-view report-view">
+        {activeView === "projects" ? (
+          projectsQuery.isLoading ? <LoadingState message="Loading project performance…" />
+            : projectsQuery.isError ? <ErrorState message="Could not load project performance." onRetry={() => void projectsQuery.refetch()} />
+            : (projectsQuery.data?.data.length ?? 0) === 0 ? <EmptyState message="Project performance will appear after tasks are created." />
+            : <table><thead><tr><th>Project</th><th>Phase</th><th>Tasks</th><th>Completed</th><th>Progress</th></tr></thead><tbody>{projectsQuery.data?.data.map((row) => <tr key={row.projectId}><td><span className="row-title">{row.projectName}</span></td><td>{humanize(row.currentPhase)}</td><td>{row.totalTasks}</td><td>{row.completedTasks}</td><td><div className="progress-cell"><span><span style={{ width: `${row.completionRatePct}%` }} /></span><strong>{Math.round(row.completionRatePct)}%</strong></div></td></tr>)}</tbody></table>
+        ) : null}
 
-      <div className="card table-wrap">
-        <h3>Team Throughput</h3>
-        {teamQuery.isLoading ? (
-          <LoadingState message="Loading team analytics..." />
-        ) : teamQuery.isError ? (
-          <ErrorState message="Could not load team analytics." onRetry={() => void teamQuery.refetch()} />
-        ) : (teamQuery.data?.data.length ?? 0) === 0 ? (
-          <EmptyState message="No team analytics available yet." />
-        ) : (
-          <table>
-            <thead>
-              <tr>
-                <th>User</th>
-                <th>Email</th>
-                <th>Total Tasks</th>
-                <th>Completed</th>
-                <th>Overdue</th>
-              </tr>
-            </thead>
-            <tbody>
-              {teamQuery.data?.data.map((row) => (
-                <tr key={row.userId}>
-                  <td>{row.userName}</td>
-                  <td>{row.userEmail}</td>
-                  <td>{row.totalTasks}</td>
-                  <td>{row.completedTasks}</td>
-                  <td>{row.overdueTasks}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+        {activeView === "team" ? (
+          teamQuery.isLoading ? <LoadingState message="Loading team throughput…" />
+            : teamQuery.isError ? <ErrorState message="Could not load team throughput." onRetry={() => void teamQuery.refetch()} />
+            : (teamQuery.data?.data.length ?? 0) === 0 ? <EmptyState message="Team throughput will appear after tasks are assigned." />
+            : <table><thead><tr><th>Person</th><th>Tasks</th><th>Completed</th><th>Overdue</th></tr></thead><tbody>{teamQuery.data?.data.map((row) => <tr key={row.userId}><td><span className="row-title">{row.userName}</span><span className="row-subtitle">{row.userEmail}</span></td><td>{row.totalTasks}</td><td>{row.completedTasks}</td><td className={row.overdueTasks > 0 ? "deadline-overdue" : ""}>{row.overdueTasks}</td></tr>)}</tbody></table>
+        ) : null}
 
-      <div className="card table-wrap">
-        <h3>Delivery Timeline</h3>
-        {timelineQuery.isLoading ? (
-          <LoadingState message="Loading timeline..." />
-        ) : timelineQuery.isError ? (
-          <ErrorState message="Could not load timeline." onRetry={() => void timelineQuery.refetch()} />
-        ) : (timelineQuery.data?.data.length ?? 0) === 0 ? (
-          <EmptyState message="No delivery timeline data available yet." />
-        ) : (
-          <table>
-            <thead>
-              <tr>
-                <th>Project</th>
-                <th>Phase</th>
-                <th>Start</th>
-                <th>Deadline</th>
-                <th>Days Remaining</th>
-              </tr>
-            </thead>
-            <tbody>
-              {timelineQuery.data?.data.map((row) => (
-                <tr key={row.projectId}>
-                  <td>{row.projectName}</td>
-                  <td>{row.currentPhase}</td>
-                  <td>{row.startDate}</td>
-                  <td>{row.deadline}</td>
-                  <td>{row.daysRemaining}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+        {activeView === "timeline" ? (
+          timelineQuery.isLoading ? <LoadingState message="Loading delivery timeline…" />
+            : timelineQuery.isError ? <ErrorState message="Could not load the timeline." onRetry={() => void timelineQuery.refetch()} />
+            : (timelineQuery.data?.data.length ?? 0) === 0 ? <EmptyState message="Delivery dates will appear after projects are scheduled." />
+            : <table><thead><tr><th>Project</th><th>Phase</th><th>Start</th><th>Deadline</th><th>Remaining</th></tr></thead><tbody>{timelineQuery.data?.data.map((row) => <tr key={row.projectId}><td><span className="row-title">{row.projectName}</span></td><td>{humanize(row.currentPhase)}</td><td>{new Date(row.startDate).toLocaleDateString()}</td><td>{new Date(row.deadline).toLocaleDateString()}</td><td className={row.daysRemaining < 0 ? "deadline-overdue" : ""}>{row.daysRemaining < 0 ? `${Math.abs(row.daysRemaining)}d overdue` : `${row.daysRemaining}d`}</td></tr>)}</tbody></table>
+        ) : null}
       </div>
     </section>
   );

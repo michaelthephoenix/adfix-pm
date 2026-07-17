@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { CircleHelp, TriangleAlert, Trash2 } from "lucide-react";
 
 type ToastKind = "success" | "error" | "info";
 
@@ -13,6 +14,7 @@ type ConfirmState = {
   message: string;
   confirmLabel: string;
   cancelLabel: string;
+  tone: "default" | "warning" | "danger";
   resolve: (value: boolean) => void;
 } | null;
 
@@ -25,6 +27,7 @@ type UIContextValue = {
     message: string;
     confirmLabel?: string;
     cancelLabel?: string;
+    tone?: "default" | "warning" | "danger";
   }) => Promise<boolean>;
 };
 
@@ -33,7 +36,7 @@ const UIContext = createContext<UIContextValue | undefined>(undefined);
 export function UIProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [confirmState, setConfirmState] = useState<ConfirmState>(null);
-  const confirmButtonRef = useRef<HTMLButtonElement | null>(null);
+  const cancelButtonRef = useRef<HTMLButtonElement | null>(null);
 
   const toast = (message: string, kind: ToastKind = "info") => {
     const id = Date.now() + Math.floor(Math.random() * 1000);
@@ -50,6 +53,7 @@ export function UIProvider({ children }: { children: React.ReactNode }) {
         message: input.message,
         confirmLabel: input.confirmLabel ?? "Confirm",
         cancelLabel: input.cancelLabel ?? "Cancel",
+        tone: input.tone ?? "default",
         resolve
       });
     });
@@ -66,7 +70,7 @@ export function UIProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!confirmState) return;
-    confirmButtonRef.current?.focus();
+    cancelButtonRef.current?.focus();
   }, [confirmState]);
 
   useEffect(() => {
@@ -92,22 +96,19 @@ export function UIProvider({ children }: { children: React.ReactNode }) {
       </div>
       {confirmState ? (
         <div className="modal-backdrop" role="presentation">
-          <div className="confirm-card" role="dialog" aria-modal="true" aria-labelledby="confirm-dialog-title">
-            <h3 id="confirm-dialog-title">{confirmState.title}</h3>
-            <p className="muted">{confirmState.message}</p>
-            <div className="inline-actions">
+          <div className={`confirm-card confirm-${confirmState.tone}`} role="dialog" aria-modal="true" aria-labelledby="confirm-dialog-title" aria-describedby="confirm-dialog-description">
+            <div className="confirm-heading">
+              <span className="confirm-icon" aria-hidden="true">
+                {confirmState.tone === "danger" ? <Trash2 size={18} /> : confirmState.tone === "warning" ? <TriangleAlert size={18} /> : <CircleHelp size={18} />}
+              </span>
+              <div>
+                <h3 id="confirm-dialog-title">{confirmState.title}</h3>
+                <p id="confirm-dialog-description">{confirmState.message}</p>
+              </div>
+            </div>
+            <div className="confirm-actions">
               <button
-                ref={confirmButtonRef}
-                type="button"
-                className="primary-button"
-                onClick={() => {
-                  confirmState.resolve(true);
-                  setConfirmState(null);
-                }}
-              >
-                {confirmState.confirmLabel}
-              </button>
-              <button
+                ref={cancelButtonRef}
                 type="button"
                 className="ghost-button"
                 onClick={() => {
@@ -116,6 +117,16 @@ export function UIProvider({ children }: { children: React.ReactNode }) {
                 }}
               >
                 {confirmState.cancelLabel}
+              </button>
+              <button
+                type="button"
+                className={confirmState.tone === "danger" ? "confirm-button confirm-button-danger" : confirmState.tone === "warning" ? "confirm-button confirm-button-warning" : "primary-button"}
+                onClick={() => {
+                  confirmState.resolve(true);
+                  setConfirmState(null);
+                }}
+              >
+                {confirmState.confirmLabel}
               </button>
             </div>
           </div>

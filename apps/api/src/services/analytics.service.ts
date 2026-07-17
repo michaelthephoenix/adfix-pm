@@ -119,7 +119,8 @@ export async function getTeamAnalytics(userId: string) {
            AND t.due_date < CURRENT_DATE
        )::text AS overdue_tasks
      FROM users u
-     LEFT JOIN tasks t ON t.assigned_to = u.id AND t.deleted_at IS NULL
+     LEFT JOIN task_assignees ta ON ta.user_id = u.id
+     LEFT JOIN tasks t ON t.id = ta.task_id AND t.deleted_at IS NULL
      LEFT JOIN accessible_projects ap ON ap.id = t.project_id
      WHERE u.deleted_at IS NULL
        AND u.is_active = TRUE
