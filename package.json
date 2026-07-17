@@ -32,6 +32,7 @@
     "check": "npm run typecheck && npm run typecheck:web && npm run test && npm run build"
   },
   "devDependencies": {
+    "@vitest/coverage-v8": "^4.1.10",
     "concurrently": "^10.0.3",
     "openapi-typescript": "^7.13.0",
     "vitest": "^4.1.10"
