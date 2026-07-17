@@ -9,7 +9,7 @@ import {
   verifyRefreshToken
 } from "../utils/tokens.js";
 
-type LoginResult = {
+export type LoginResult = {
   accessToken: string;
   refreshToken: string;
   user: {
@@ -17,14 +17,16 @@ type LoginResult = {
     email: string;
     name: string;
     isAdmin: boolean;
+    accountType: "staff" | "client";
   };
 };
 
-async function createSessionForUser(input: {
+export async function createSessionForUser(input: {
   userId: string;
   email: string;
   name: string;
   isAdmin: boolean;
+  accountType: "staff" | "client";
   userAgent?: string;
   ipAddress?: string;
 }): Promise<LoginResult> {
@@ -48,7 +50,8 @@ async function createSessionForUser(input: {
     userId: input.userId,
     email: input.email,
     name: input.name,
-    isAdmin: input.isAdmin
+    isAdmin: input.isAdmin,
+    accountType: input.accountType
   });
 
   return {
@@ -58,7 +61,8 @@ async function createSessionForUser(input: {
       id: input.userId,
       email: input.email,
       name: input.name,
-      isAdmin: input.isAdmin
+      isAdmin: input.isAdmin,
+      accountType: input.accountType
     }
   };
 }
@@ -78,10 +82,11 @@ export async function signupWithEmailPassword(input: {
       email: string;
       name: string;
       is_admin: boolean;
+      account_type: "staff" | "client";
     }>(
-      `INSERT INTO users (email, name, password_hash, is_active, is_admin, created_at, updated_at)
-       VALUES ($1, $2, $3, TRUE, FALSE, NOW(), NOW())
-       RETURNING id, email, name, is_admin`,
+      `INSERT INTO users (email, name, password_hash, is_active, is_admin, account_type, created_at, updated_at)
+       VALUES ($1, $2, $3, TRUE, FALSE, 'staff', NOW(), NOW())
+       RETURNING id, email, name, is_admin, account_type`,
       [input.email, input.name, passwordHash]
     );
 
@@ -92,6 +97,7 @@ export async function signupWithEmailPassword(input: {
       email: createdUser.email,
       name: createdUser.name,
       isAdmin: createdUser.is_admin,
+      accountType: createdUser.account_type,
       userAgent: input.userAgent,
       ipAddress: input.ipAddress
     });
@@ -119,9 +125,10 @@ export async function loginWithEmailPassword(input: {
     email: string;
     name: string;
     is_admin: boolean;
+    account_type: "staff" | "client";
     password_hash: string;
   }>(
-    `SELECT id, email, name, is_admin, password_hash
+    `SELECT id, email, name, is_admin, account_type, password_hash
      FROM users
      WHERE email = $1 AND deleted_at IS NULL AND is_active = TRUE
      LIMIT 1`,
@@ -139,6 +146,7 @@ export async function loginWithEmailPassword(input: {
     email: user.email,
     name: user.name,
     isAdmin: user.is_admin,
+    accountType: user.account_type,
     userAgent: input.userAgent,
     ipAddress: input.ipAddress
   });
@@ -184,8 +192,9 @@ export async function refreshAuthToken(input: {
     email: string;
     name: string;
     is_admin: boolean;
+    account_type: "staff" | "client";
   }>(
-    `SELECT id, email, name, is_admin
+    `SELECT id, email, name, is_admin, account_type
      FROM users
      WHERE id = $1 AND deleted_at IS NULL AND is_active = TRUE
      LIMIT 1`,
@@ -212,7 +221,8 @@ export async function refreshAuthToken(input: {
     userId: user.id,
     email: user.email,
     name: user.name,
-    isAdmin: user.is_admin
+    isAdmin: user.is_admin,
+    accountType: user.account_type
   });
 
   return {
@@ -222,7 +232,8 @@ export async function refreshAuthToken(input: {
       id: user.id,
       email: user.email,
       name: user.name,
-      isAdmin: user.is_admin
+      isAdmin: user.is_admin,
+      accountType: user.account_type
     }
   };
 }

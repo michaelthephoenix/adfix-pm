@@ -33,7 +33,7 @@ describe("AppShell", () => {
     );
 
     await user.click(screen.getByRole("button", { name: /adfix admin/i }));
-    await user.click(screen.getByRole("button", { name: /logout/i }));
+    await user.click(screen.getByRole("menuitem", { name: /logout/i }));
 
     expect(logoutMock).toHaveBeenCalledTimes(1);
   });

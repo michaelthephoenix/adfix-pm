@@ -4,6 +4,8 @@ import { apiRequest } from "../lib/api";
 import { useAuth } from "../state/auth";
 import { useUI } from "../state/ui";
 import { EmptyState, ErrorState, LoadingState } from "../components/States";
+import { Button } from "../components/ui/Button";
+import { PageHeader } from "../components/ui/PageHeader";
 
 type Notification = {
   id: string;
@@ -132,19 +134,14 @@ export function NotificationsPage() {
 
   return (
     <section>
-      <div className="section-head">
-        <h2>Notifications</h2>
-        <div className="inline-actions">
-          <p className="muted">{notificationsQuery.data?.meta.unreadCount ?? 0} unread</p>
-          <button
-            className="ghost-button"
+      <PageHeader title="Notifications" description="Updates that need your attention." meta={<span>{notificationsQuery.data?.meta.unreadCount ?? 0} unread</span>} actions={(notificationsQuery.data?.meta.unreadCount ?? 0) > 0 ? (
+          <Button
             onClick={() => markAllReadMutation.mutate()}
             disabled={markAllReadMutation.isPending}
           >
-            {markAllReadMutation.isPending ? "Marking all..." : "Mark all read"}
-          </button>
-        </div>
-      </div>
+            {markAllReadMutation.isPending ? "Marking…" : "Mark all read"}
+          </Button>
+      ) : null} />
       <div className="card notifications-list">
         {notificationsQuery.data?.data.length ? (
           notificationsQuery.data.data.map((notification) => (
@@ -154,13 +151,12 @@ export function NotificationsPage() {
                 <p>{notification.message}</p>
               </div>
               {!notification.is_read ? (
-                <button
-                  className="ghost-button"
+                <Button size="sm"
                   onClick={() => markReadMutation.mutate(notification.id)}
                   disabled={Boolean(processingNotificationId) || markAllReadMutation.isPending}
                 >
-                  {processingNotificationId === notification.id ? "Marking..." : "Mark read"}
-                </button>
+                  {processingNotificationId === notification.id ? "Marking…" : "Mark read"}
+                </Button>
               ) : null}
             </article>
           ))

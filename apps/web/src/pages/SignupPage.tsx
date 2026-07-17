@@ -44,8 +44,8 @@ export function SignupPage() {
   return (
     <div className="login-wrap">
       <form className="card login-card" onSubmit={handleSubmit}>
-        <h1>Create account</h1>
-        <p className="muted">Sign up for Adfix PM</p>
+        <div className="auth-brand"><span className="brand-mark">A</span><strong>Adfix</strong></div>
+        <div className="auth-heading"><h1>Create account</h1><p className="muted">Join the Adfix workspace.</p></div>
         <label className="field">
           <span>Name</span>
           <input value={name} onChange={(event) => setName(event.target.value)} required />
@@ -66,7 +66,7 @@ export function SignupPage() {
         </label>
         {error ? <p className="error-text">{error}</p> : null}
         <button className="primary-button" type="submit" disabled={isSubmitting}>
-          {isSubmitting ? "Creating account..." : "Create account"}
+          {isSubmitting ? "Creating account…" : "Create account"}
         </button>
         <p className="muted">
           Already have an account? <Link to="/login">Sign in</Link>

@@ -40,8 +40,8 @@ export function LoginPage() {
   return (
     <div className="login-wrap">
       <form className="card login-card" onSubmit={handleSubmit}>
-        <h1>Adfix PM</h1>
-        <p className="muted">Sign in to continue</p>
+        <div className="auth-brand"><span className="brand-mark">A</span><strong>Adfix</strong></div>
+        <div className="auth-heading"><h1>Sign in</h1><p className="muted">Project operations and client reviews.</p></div>
         <label className="field">
           <span>Email</span>
           <input value={email} onChange={(event) => setEmail(event.target.value)} type="email" required />
@@ -57,7 +57,7 @@ export function LoginPage() {
         </label>
         {error ? <p className="error-text">{error}</p> : null}
         <button className="primary-button" type="submit" disabled={isSubmitting}>
-          {isSubmitting ? "Signing in..." : "Sign in"}
+          {isSubmitting ? "Signing in…" : "Sign in"}
         </button>
         <p className="muted">
           Need an account? <Link to="/signup">Sign up</Link>

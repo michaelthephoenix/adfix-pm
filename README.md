@@ -1,154 +1,100 @@
-# Adfix PM
+# Adfix PM functional prototype
 
-Monorepo scaffold for the Adfix Project Management System.
+Adfix PM is a local-first creative project operations application. Staff organize clients, projects, team assignments, tasks, files, and deliverables across five phases. Invited clients use a separate portal to review submitted work without seeing internal tasks, budgets, staff notes, team controls, or audit history.
 
-## Structure
-- `apps/api`: Node + Express API (TypeScript)
-- `apps/web`: React + Vite frontend (TypeScript)
-- `packages/config`: shared config placeholder
+The five phases are Client Acquisition, Strategy & Planning, Production, Post-production, and Delivery. Client approval never controls a phase transition. Delivery is a staff decision; it permanently closes client approval and change-request actions while preserving final files and review history.
 
-## Quick Start
-1. Copy `apps/api/.env.example` to `apps/api/.env`.
-2. Start PostgreSQL: `docker compose up -d`.
-3. Install dependencies: `npm install`.
-4. Apply schema migrations: `npm run db:migrate`.
-5. Seed default admin user: `npm run db:seed`.
-6. Run API in dev mode: `npm run dev:api`.
+## Start locally
 
-## Auth Test User
-- Email: value from `SEED_ADMIN_EMAIL` (default `admin@adfix.local`)
-- Password: value from `SEED_ADMIN_PASSWORD` (default `ChangeMe123!`)
+Requirements: Node.js 22+ and npm. PostgreSQL, Railway, Docker, and cloud storage are not required.
 
-## Useful Commands
-- `npm run dev:web`: start frontend dev server
-- `npm run build:web`: build frontend
-- `npm run typecheck:web`: run frontend TypeScript checks
-- `npm run db:migrate`: apply pending SQL migrations from `apps/api/db/migrations`
-- `npm run db:seed`: upsert the default admin user
-- `npm run db:seed:demo`: seed admin + demo client/project/tasks
-- `npm run openapi:export`: export versioned OpenAPI spec to `apps/api/openapi/openapi.v1.json`
-- `npm run typecheck`: run TypeScript checks for API + scripts
-- `npm run test:api`: run integration tests (auth, clients, projects, phase transitions, activity logs)
-- `npm run test:api:coverage`: run integration tests with coverage thresholds
+```text
+npm install
+npm run db:reset:demo
+npm run dev
+```
 
-## Troubleshooting
-- Login fails / pages stay on loading:
-  - Ensure API is running: `npm run dev:api`
-  - Check health: `http://localhost:4000/api/health` should return `200`
-- Frontend can’t load data (`ERR_CONNECTION_REFUSED` to `:4000`):
-  - Start web + API together:
-    - `npm run dev:web`
-    - `npm run dev:api`
-- Database-related auth/data failures:
-  - Ensure Docker Desktop is running
-  - Start Postgres container: `docker compose up -d`
-  - Confirm container status: `docker compose ps`
-- Missing seed user / invalid credentials:
-  - Run `npm run db:seed` and login with `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD`
-- Schema mismatch after pulling latest code:
-  - Run `npm run db:migrate`
+Open `http://localhost:5173`. The API runs at `http://localhost:4000`.
 
-## Rate Limiting
-- Auth routes (`/api/auth/*`): `AUTH_RATE_LIMIT_MAX` per `AUTH_RATE_LIMIT_WINDOW_MS`
-- Protected API routes: `API_RATE_LIMIT_MAX` per `API_RATE_LIMIT_WINDOW_MS`
-- In `NODE_ENV=test`, rate limiting is skipped so tests remain deterministic.
+The embedded PostgreSQL-compatible database is created automatically under `apps/api/.data/pglite`. Uploaded files are stored under `apps/api/.data/uploads`. Both paths are ignored by Git.
 
-## CORS
-- Browser origins are controlled by `CORS_ALLOWED_ORIGINS` (comma-separated).
-- Default local dev origins:
-  - `http://localhost:3000`
-  - `http://localhost:5173`
-- CORS preflight (`OPTIONS`) is handled for both `/api/*` and `/api/v1/*`.
+## Demo accounts
 
-## API Docs + Observability
-- API base paths:
-  - Preferred (versioned): `/api/v1`
-  - Backward-compatible alias: `/api`
-- OpenAPI spec endpoints:
-  - `GET /api/v1/docs.json`
-  - `GET /api/docs.json`
-- Docs landing pages:
-  - `GET /api/v1/docs`
-  - `GET /api/docs`
-- CI uploads OpenAPI artifact: `api-openapi-v1` (`apps/api/openapi/openapi.v1.json`)
-- Spec now includes all active route groups (`auth`, `clients`, `projects`, `tasks`, `files`, `analytics`, `search`, `users`, admin controls).
-- Liveness endpoints:
-  - `/api/health`
-  - `/api/v1/health`
-- Readiness endpoints (database probe):
-  - `/api/ready`
-  - `/api/v1/ready`
-- Every response includes `x-request-id` for tracing.
+| Workspace | Email | Password |
+| --- | --- | --- |
+| Administrator/staff | `admin@adfix.local` | `ChangeMe123!` |
+| Manager and other seeded staff | `manager@adfix.local` | `DemoUser123!` |
+| Invited client portal | `client@adfix.local` | `DemoUser123!` |
 
-## Runtime Behavior
-- API server handles graceful shutdown on `SIGINT`/`SIGTERM`:
-  - stops accepting new HTTP connections
-  - closes PostgreSQL pool
+The demo reset creates a representative project, tasks, a client membership, a local deliverable file, and an open client review.
 
-## Validation Error Shape
-- Request validation failures return:
-  - `code`: `VALIDATION_ERROR`
-  - `error`: concise message
-  - `requestId`: response correlation id
-  - `details`: Zod `flatten()` output (`formErrors`, `fieldErrors`)
+## Prototype journey
 
-## Error Contract
-- API errors now use a consistent shape:
-  - `code`: stable machine-readable identifier (e.g. `UNAUTHORIZED`, `FORBIDDEN`, `NOT_FOUND`, `CONFLICT`)
-  - `error`: human-readable message
-  - `requestId`: correlation id from `x-request-id`
+1. Sign in as staff and open Projects.
+2. Create a client/project or use Demo Project.
+3. Move work forward one phase at a time on the five-column board.
+4. Open a client and create a secure seven-day invitation link.
+5. Open a project, upload files, create a deliverable, and submit a numbered version.
+6. Sign in as the client, open My Projects, and approve or request changes. A change request requires a comment.
+7. Return as staff and move the project into Delivery. If reviews remain unresolved, the UI warns and asks for confirmation but does not block staff.
+8. Return as the client. Files and history remain downloadable, but review controls are read-only.
 
-## Pagination + Sorting
-- List endpoints support consistent query controls:
-  - `page`, `pageSize`
-  - `sortBy`, `sortOrder`
-- List responses include these values in `meta` so frontend table state can be synchronized.
+## Useful commands
 
-## Task Comments
-- Task notes/comments endpoints are available:
-  - `GET /api/tasks/:id/comments`
-  - `POST /api/tasks/:id/comments`
-  - `DELETE /api/tasks/:id/comments/:commentId`
-- RBAC behavior:
-  - `viewer`: list comments only
-  - `member`/`manager`/`owner`: create and delete comments
+| Command | Purpose |
+| --- | --- |
+| `npm run dev` | Start API and React app together |
+| `npm run db:reset:demo` | Clear local business data and rebuild the demo journey |
+| `npm run db:migrate` | Apply pending SQL migrations |
+| `npm run db:seed:demo` | Add/update demo records without clearing existing data |
+| `npm run openapi:sync` | Export OpenAPI and generate frontend TypeScript contracts |
+| `npm run typecheck` / `npm run typecheck:web` | Check backend/frontend types |
+| `npm test` | Run API and frontend tests |
+| `npm run build` | Build API and React application |
+| `npm start` | Serve the built React app and API from port 4000 |
+| `npm run check` | Run all type checks, tests, and production builds |
 
-## Notifications
-- In-app notification endpoints:
-  - `GET /api/notifications`
-  - `PATCH /api/notifications/:id/read`
-  - `POST /api/notifications/read-all`
-- Notification triggers implemented:
-  - project team assignment (`project_team_assigned`)
-  - task assignment (`task_assigned`)
+## Sign-in and permissions
 
-## Seed Profiles
-- `SEED_PROFILE=admin_only` (default): only admin user
-- `SEED_PROFILE=demo`: admin user + demo client/project/task data
+- Access tokens are short-lived and kept only in browser memory.
+- Rotating refresh tokens use HTTP-only cookies. The app restores a session on load and retries one failed authenticated request after refresh.
+- Staff and client account types are enforced by API middleware.
+- Client responses use dedicated sanitized portal endpoints.
+- Invitation tokens are random, single-use, stored only as hashes, revocable, and expire after seven days.
+- Files are limited to 50 MB, checked against an allowlist, stored under generated object keys, checksummed with SHA-256, and authorized again on every download.
 
-## RBAC
-- Project roles:
-  - `owner`: project creator (implicit)
-  - `manager`, `member`, `viewer`: assigned through project team endpoint
-- Team assignment endpoint accepts only: `manager`, `member`, `viewer`.
-- Permission model (project-scoped):
-  - `viewer`: read-only access
-  - `member`: read + tasks/files write
-  - `manager`: member permissions + project update + team management
-  - `owner`: full permissions including project delete
-- `search` and `analytics` responses are scoped to projects the requester can access.
-- RBAC denials are audit-logged as `authz_denied` in `activity_log`.
-- Project list/detail responses include `current_user_role` (`owner|manager|member|viewer`) for frontend action gating.
+## Data backup and reset
 
-## Admin Controls
-- Users table now includes `is_admin` (migration: `0002_admin_controls.sql`).
-- Seeded admin user is marked as `is_admin = true`.
-- Admin-only user endpoints:
-  - `GET /api/users/audit-logs`
-  - `PATCH /api/users/:id/status`
-  - `POST /api/users/:id/project-roles/reset`
+Stop the app before copying a backup. Back up the entire `apps/api/.data` directory so the database and uploads remain consistent. Restore by replacing that directory while the app is stopped. Use `npm run db:reset:demo` when a clean demonstration state is preferred over restoration.
 
-## Current Phase
-- Phase 0 foundation scaffolding
-- Initial schema migration in `apps/api/db/migrations/0001_init.sql`
-- Auth/session endpoints scaffolded under `apps/api/src/routes/auth.ts`
+## Optional PostgreSQL and object storage
+
+Set `DATABASE_URL` in `apps/api/.env` to use any normal PostgreSQL service instead of embedded PGlite. The SQL and application logic are provider-neutral.
+
+Local uploads implement the shared storage-provider interface. A future S3-compatible adapter can replace it without changing project, authorization, deliverable, or review code. Configure `LOCAL_UPLOAD_DIR` for a different local path.
+
+See `apps/api/.env.example` for all runtime settings. Set `COOKIE_SECURE=true` only when serving over HTTPS. Production secrets must be at least 32 characters and must not use the development defaults.
+
+## Single-service and container mode
+
+After `npm run build`, `npm start` serves the React build and REST API together at `http://localhost:4000`. The included provider-neutral `Dockerfile` uses `/app/data` for the embedded database and uploads:
+
+```text
+docker build -t adfix-pm .
+docker run --rm -p 4000:4000 -v adfix-data:/app/data \
+  -e JWT_ACCESS_SECRET=replace-with-32-plus-random-characters \
+  -e JWT_REFRESH_SECRET=replace-with-another-32-plus-random-value \
+  adfix-pm
+```
+
+Any Node.js container host, VPS, or local Docker installation can run the same image. Hosting is intentionally optional for the prototype.
+
+## API reference
+
+While the API is running:
+
+- OpenAPI JSON: `http://localhost:4000/api/v1/docs.json`
+- API documentation page: `http://localhost:4000/api/v1/docs`
+- Readiness check: `http://localhost:4000/api/v1/ready`
+
+The versioned API lives at `/api/v1`; `/api` remains a backward-compatible alias.

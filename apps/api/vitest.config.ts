@@ -2,6 +2,11 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   test: {
+    env: {
+      NODE_ENV: "test",
+      PGLITE_DATA_DIR: ".data/pglite-test",
+      LOCAL_UPLOAD_DIR: ".data/uploads-test"
+    },
     include: ["tests/**/*.test.ts"],
     testTimeout: 30000,
     coverage: {

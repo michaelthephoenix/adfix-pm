@@ -1,3 +1,4 @@
+import bcrypt from "bcryptjs";
 import { pool } from "../db/pool.js";
 
 type UserRow = {
@@ -7,6 +8,7 @@ type UserRow = {
   avatar_url: string | null;
   is_active: boolean;
   is_admin: boolean;
+  account_type: "staff" | "client";
   last_login_at: Date | null;
   created_at: Date;
   updated_at: Date;
@@ -53,11 +55,12 @@ export async function listUsers(input?: {
          avatar_url,
          is_active,
          is_admin,
+         account_type,
          last_login_at,
          created_at,
          updated_at
        FROM users
-       WHERE deleted_at IS NULL
+       WHERE deleted_at IS NULL AND account_type = 'staff'
        ORDER BY ${orderColumn} ${orderDirection}
        LIMIT $1 OFFSET $2`,
       [pageSize, offset]
@@ -65,7 +68,7 @@ export async function listUsers(input?: {
     pool.query<{ total: string }>(
       `SELECT COUNT(*)::text AS total
        FROM users
-       WHERE deleted_at IS NULL`
+       WHERE deleted_at IS NULL AND account_type = 'staff'`
     )
   ]);
 
@@ -73,6 +76,28 @@ export async function listUsers(input?: {
     rows: dataResult.rows,
     total: Number(countResult.rows[0]?.total ?? 0)
   };
+}
+
+export async function createStaffUser(input: {
+  email: string;
+  name: string;
+  password: string;
+  isAdmin: boolean;
+}) {
+  const passwordHash = await bcrypt.hash(input.password, 12);
+  try {
+    const result = await pool.query<UserRow>(
+      `INSERT INTO users (email, name, password_hash, is_active, is_admin, account_type)
+       VALUES ($1, $2, $3, TRUE, $4, 'staff')
+       RETURNING id, email, name, avatar_url, is_active, is_admin, account_type,
+         last_login_at, created_at, updated_at`,
+      [input.email.toLowerCase(), input.name, passwordHash, input.isAdmin]
+    );
+    return result.rows[0];
+  } catch (error) {
+    if ((error as { code?: string }).code === "23505") return "email_taken" as const;
+    throw error;
+  }
 }
 
 export async function getUserById(userId: string) {
@@ -83,7 +108,8 @@ export async function getUserById(userId: string) {
        name,
        avatar_url,
        is_active,
-       is_admin,
+      is_admin,
+      account_type,
        last_login_at,
        created_at,
        updated_at
@@ -134,6 +160,7 @@ export async function updateUserProfile(
        avatar_url,
        is_active,
        is_admin,
+       account_type,
        last_login_at,
        created_at,
        updated_at`,
@@ -156,6 +183,7 @@ export async function setUserActiveStatus(userId: string, isActive: boolean) {
        avatar_url,
        is_active,
        is_admin,
+       account_type,
        last_login_at,
        created_at,
        updated_at`,

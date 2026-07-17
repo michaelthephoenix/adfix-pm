@@ -461,6 +461,15 @@ export async function transitionProjectPhase(input: {
       return { ok: false, reason: "invalid_transition" };
     }
 
+    const unresolvedReviewResult = input.nextPhase === "delivery"
+      ? await client.query<{ count: string }>(
+          `SELECT COUNT(*)::text AS count FROM deliverables
+           WHERE project_id = $1 AND deleted_at IS NULL AND status <> 'approved'`,
+          [input.projectId]
+        )
+      : { rows: [{ count: "0" }] };
+    const unresolvedReviews = Number(unresolvedReviewResult.rows[0]?.count ?? 0);
+
     const updatedQuery = await client.query<ProjectRow>(
       `UPDATE projects
        SET current_phase = $1, updated_at = NOW()
@@ -504,8 +513,8 @@ export async function transitionProjectPhase(input: {
     }
 
     await client.query(
-      `INSERT INTO activity_log (project_id, user_id, action, details, created_at)
-       VALUES ($1, $2, $3, $4::jsonb, NOW())`,
+      `INSERT INTO activity_log (project_id, user_id, action, details, client_visible, created_at)
+       VALUES ($1, $2, $3, $4::jsonb, TRUE, NOW())`,
       [
         input.projectId,
         input.userId,
@@ -513,7 +522,8 @@ export async function transitionProjectPhase(input: {
         JSON.stringify({
           from: project.current_phase,
           to: input.nextPhase,
-          reason: input.reason ?? null
+          reason: input.reason ?? null,
+          unresolvedReviews
         })
       ]
     );

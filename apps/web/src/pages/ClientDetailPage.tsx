@@ -3,6 +3,8 @@ import { FormEvent, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ApiError, apiRequest } from "../lib/api";
 import { useAuth } from "../state/auth";
+import { ClientInvitationsPanel } from "../components/ClientInvitationsPanel";
+import { PageHeader } from "../components/ui/PageHeader";
 
 type ClientDetailResponse = {
   data: {
@@ -194,15 +196,7 @@ export function ClientDetailPage() {
 
   return (
     <section>
-      <div className="section-head">
-        <div>
-          <h2>{client.name}</h2>
-          <p className="muted">{client.company ?? "No company set"}</p>
-        </div>
-        <Link to="/clients" className="ghost-button">
-          Back to clients
-        </Link>
-      </div>
+      <PageHeader title={client.name} description={client.company ?? "Independent client"} actions={<Link to="/clients" className="ghost-button">Back to clients</Link>} />
 
       <div className="card">
         <div className="section-head">
@@ -286,6 +280,8 @@ export function ClientDetailPage() {
           <p className="kpi-value short">{highPriorityCount}</p>
         </div>
       </div>
+
+      <ClientInvitationsPanel clientId={client.id} />
 
       <div className="card detail-grid">
         <div>

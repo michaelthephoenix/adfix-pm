@@ -1,6 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FormEvent, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { MoreHorizontal, Plus } from "lucide-react";
+import { Button } from "../components/ui/Button";
+import { Dialog } from "../components/ui/Dialog";
+import { PageHeader } from "../components/ui/PageHeader";
 import { apiRequest, ApiError } from "../lib/api";
 import { useAuth } from "../state/auth";
 import { useUI } from "../state/ui";
@@ -18,27 +22,20 @@ type ClientRow = {
 
 type ClientsResponse = {
   data: ClientRow[];
-  meta: {
-    page: number;
-    pageSize: number;
-    sortBy: string;
-    sortOrder: string;
-    total: number;
-  };
+  meta: { page: number; pageSize: number; sortBy: string; sortOrder: string; total: number };
 };
+
+const emptyForm = { name: "", company: "", email: "", phone: "", notes: "" };
 
 export function ClientsPage() {
   const { accessToken } = useAuth();
   const ui = useUI();
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [name, setName] = useState("");
-  const [company, setCompany] = useState("");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
-  const [notes, setNotes] = useState("");
+  const [form, setForm] = useState(emptyForm);
   const [formError, setFormError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [deletingClientId, setDeletingClientId] = useState<string | null>(null);
   const page = Number(searchParams.get("page") ?? "1") || 1;
   const sortBy = searchParams.get("sortBy") ?? "updatedAt";
@@ -47,13 +44,7 @@ export function ClientsPage() {
 
   const clientsQuery = useQuery({
     queryKey: ["clients-page", page, sortBy, sortOrder],
-    queryFn: () =>
-      apiRequest<ClientsResponse>(
-        `/clients?page=${page}&pageSize=${pageSize}&sortBy=${sortBy}&sortOrder=${sortOrder}`,
-        {
-        accessToken: accessToken ?? undefined
-        }
-      ),
+    queryFn: () => apiRequest<ClientsResponse>(`/clients?page=${page}&pageSize=${pageSize}&sortBy=${sortBy}&sortOrder=${sortOrder}`, { accessToken: accessToken ?? undefined }),
     enabled: Boolean(accessToken)
   });
 
@@ -62,292 +53,201 @@ export function ClientsPage() {
     await queryClient.invalidateQueries({ queryKey: ["clients-for-project-form"] });
   };
 
+  const closeEditor = () => {
+    setIsEditorOpen(false);
+    setEditingId(null);
+    setForm(emptyForm);
+    setFormError(null);
+  };
+
   const createClientMutation = useMutation({
-    mutationFn: () =>
-      apiRequest("/clients", {
-        method: "POST",
-        accessToken: accessToken ?? undefined,
-        body: {
-          name: name.trim(),
-          company: company.trim() ? company.trim() : null,
-          email: email.trim() ? email.trim() : null,
-          phone: phone.trim() ? phone.trim() : null,
-          notes: notes.trim() ? notes.trim() : null
-        }
-      }),
+    mutationFn: () => apiRequest("/clients", {
+      method: "POST",
+      accessToken: accessToken ?? undefined,
+      body: {
+        name: form.name.trim(),
+        company: form.company.trim() || null,
+        email: form.email.trim() || null,
+        phone: form.phone.trim() || null,
+        notes: form.notes.trim() || null
+      }
+    }),
     onSuccess: async () => {
-      setName("");
-      setCompany("");
-      setEmail("");
-      setPhone("");
-      setNotes("");
-      setEditingId(null);
-      setFormError(null);
+      closeEditor();
       await refreshClients();
       ui.success("Client created.");
     },
     onError: (error) => {
-      if (error instanceof ApiError) {
-        setFormError(error.message);
-        ui.error(error.message);
-      } else {
-        setFormError("Could not create client.");
-        ui.error("Could not create client.");
-      }
+      const message = error instanceof ApiError ? error.message : "Could not create client.";
+      setFormError(message);
+      ui.error(message);
     }
   });
 
   const updateClientMutation = useMutation({
-    mutationFn: () =>
-      apiRequest(`/clients/${editingId}`, {
-        method: "PUT",
-        accessToken: accessToken ?? undefined,
-        body: {
-          name: name.trim(),
-          company: company.trim() ? company.trim() : null,
-          email: email.trim() ? email.trim() : null,
-          phone: phone.trim() ? phone.trim() : null,
-          notes: notes.trim() ? notes.trim() : null
-        }
-      }),
+    mutationFn: () => apiRequest(`/clients/${editingId}`, {
+      method: "PUT",
+      accessToken: accessToken ?? undefined,
+      body: {
+        name: form.name.trim(),
+        company: form.company.trim() || null,
+        email: form.email.trim() || null,
+        phone: form.phone.trim() || null,
+        notes: form.notes.trim() || null
+      }
+    }),
     onSuccess: async () => {
-      setName("");
-      setCompany("");
-      setEmail("");
-      setPhone("");
-      setNotes("");
-      setEditingId(null);
-      setFormError(null);
+      closeEditor();
       await refreshClients();
       ui.success("Client updated.");
     },
     onError: (error) => {
-      if (error instanceof ApiError) {
-        setFormError(error.message);
-        ui.error(error.message);
-      } else {
-        setFormError("Could not update client.");
-        ui.error("Could not update client.");
-      }
+      const message = error instanceof ApiError ? error.message : "Could not update client.";
+      setFormError(message);
+      ui.error(message);
     }
   });
 
   const deleteClientMutation = useMutation({
-    onMutate: async (id: string) => {
-      setDeletingClientId(id);
-      const filter = { queryKey: ["clients-page"] as const };
-      await queryClient.cancelQueries(filter);
-      const snapshots = queryClient.getQueriesData<ClientsResponse>(filter);
-
-      snapshots.forEach(([queryKey, previous]) => {
-        if (!previous) return;
-        queryClient.setQueryData<ClientsResponse>(queryKey, {
-          ...previous,
-          data: previous.data.filter((client) => client.id !== id),
-          meta: {
-            ...previous.meta,
-            total: Math.max(0, previous.meta.total - 1)
-          }
-        });
-      });
-
-      return { snapshots };
-    },
-    mutationFn: (id: string) =>
-      apiRequest(`/clients/${id}`, {
-        method: "DELETE",
-        accessToken: accessToken ?? undefined
-      }),
-    onSuccess: () => {
+    mutationFn: (id: string) => apiRequest(`/clients/${id}`, { method: "DELETE", accessToken: accessToken ?? undefined }),
+    onMutate: (id) => setDeletingClientId(id),
+    onSuccess: async () => {
+      closeEditor();
+      await refreshClients();
       ui.success("Client deleted.");
     },
-    onError: (_error, _id, context) => {
-      context?.snapshots?.forEach(([queryKey, previous]) => {
-        queryClient.setQueryData(queryKey, previous);
-      });
-      ui.error("Could not delete client.");
-    },
-    onSettled: async () => {
-      setDeletingClientId(null);
-      await refreshClients();
-    }
+    onError: () => ui.error("Could not delete client."),
+    onSettled: () => setDeletingClientId(null)
   });
 
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!name.trim()) return;
-    if (editingId) {
-      updateClientMutation.mutate();
-      return;
-    }
-    createClientMutation.mutate();
+    if (!form.name.trim()) return;
+    if (editingId) updateClientMutation.mutate();
+    else createClientMutation.mutate();
   };
 
-  const handleDelete = async (id: string, nameValue: string) => {
+  const openCreate = () => {
+    setEditingId(null);
+    setForm(emptyForm);
+    setFormError(null);
+    setIsEditorOpen(true);
+  };
+
+  const openEdit = (client: ClientRow) => {
+    setEditingId(client.id);
+    setForm({
+      name: client.name,
+      company: client.company ?? "",
+      email: client.email ?? "",
+      phone: client.phone ?? "",
+      notes: client.notes ?? ""
+    });
+    setFormError(null);
+    setIsEditorOpen(true);
+  };
+
+  const handleDelete = async () => {
+    if (!editingId) return;
     const shouldDelete = await ui.confirm({
       title: "Delete client",
-      message: `Delete "${nameValue}"? This cannot be undone.`,
+      message: `Delete “${form.name}”? This cannot be undone.`,
       confirmLabel: "Delete"
     });
-    if (!shouldDelete) return;
-    deleteClientMutation.mutate(id);
+    if (shouldDelete) deleteClientMutation.mutate(editingId);
   };
 
-  const setListParam = (key: "page" | "sortBy" | "sortOrder", value: string) => {
+  const setPage = (nextPage: number) => {
     const next = new URLSearchParams(searchParams);
-    next.set(key, value);
-    if (key !== "page") {
-      next.set("page", "1");
-    }
+    next.set("page", String(nextPage));
     setSearchParams(next, { replace: true });
   };
 
+  const setSort = (value: string) => {
+    const [nextSortBy, nextSortOrder] = value.split(":");
+    const next = new URLSearchParams(searchParams);
+    next.set("sortBy", nextSortBy);
+    next.set("sortOrder", nextSortOrder);
+    next.set("page", "1");
+    setSearchParams(next, { replace: true });
+  };
+
+  const isSaving = createClientMutation.isPending || updateClientMutation.isPending;
+
   return (
     <section>
-      <div className="section-head">
-        <h2>Clients</h2>
-        <p className="muted">{clientsQuery.data?.meta.total ?? 0} clients</p>
-      </div>
+      <PageHeader
+        title="Clients"
+        description="Organizations and contacts connected to active work."
+        meta={<span>{clientsQuery.data?.meta.total ?? 0}</span>}
+        actions={<Button variant="primary" icon={<Plus size={15} />} onClick={openCreate}>New client</Button>}
+      />
 
-      <form className="card task-create-form" onSubmit={onSubmit}>
-        <h3>{editingId ? "Edit client" : "Create client"}</h3>
-        <div className="project-form-grid">
-          <input placeholder="Name" value={name} onChange={(event) => setName(event.target.value)} required />
-          <input
-            placeholder="Company"
-            value={company}
-            onChange={(event) => setCompany(event.target.value)}
-          />
-          <input placeholder="Email" value={email} onChange={(event) => setEmail(event.target.value)} />
-          <input placeholder="Phone" value={phone} onChange={(event) => setPhone(event.target.value)} />
-          <input placeholder="Notes" value={notes} onChange={(event) => setNotes(event.target.value)} />
-          <button
-            className="primary-button"
-            type="submit"
-            disabled={createClientMutation.isPending || updateClientMutation.isPending}
-          >
-            {createClientMutation.isPending || updateClientMutation.isPending
-              ? editingId
-                ? "Saving..."
-                : "Creating..."
-              : editingId
-                ? "Save"
-                : "Create"}
-          </button>
-        </div>
-        {editingId ? (
-          <button
-            type="button"
-            className="ghost-button"
-            onClick={() => {
-              setEditingId(null);
-              setName("");
-              setCompany("");
-              setEmail("");
-              setPhone("");
-              setNotes("");
-            }}
-          >
-            Cancel edit
-          </button>
-        ) : null}
-        {formError ? <p className="error-text">{formError}</p> : null}
-      </form>
-
-      <div className="card tasks-toolbar">
-        <select value={sortBy} onChange={(event) => setListParam("sortBy", event.target.value)}>
-          <option value="updatedAt">Sort: updatedAt</option>
-          <option value="createdAt">Sort: createdAt</option>
-          <option value="name">Sort: name</option>
-        </select>
-        <select value={sortOrder} onChange={(event) => setListParam("sortOrder", event.target.value)}>
-          <option value="desc">desc</option>
-          <option value="asc">asc</option>
+      <div className="list-toolbar">
+        <span className="list-toolbar-label">All clients</span>
+        <select aria-label="Sort clients" value={`${sortBy}:${sortOrder}`} onChange={(event) => setSort(event.target.value)}>
+          <option value="updatedAt:desc">Recently updated</option>
+          <option value="name:asc">Name A–Z</option>
+          <option value="createdAt:desc">Newest</option>
+          <option value="createdAt:asc">Oldest</option>
         </select>
       </div>
 
-      <div className="card table-wrap">
-        {clientsQuery.isLoading ? (
-          <LoadingState message="Loading clients..." />
-        ) : clientsQuery.isError ? (
-          <ErrorState message="Could not load clients." onRetry={() => void clientsQuery.refetch()} />
-        ) : (clientsQuery.data?.data.length ?? 0) === 0 ? (
-          <EmptyState message="No clients found." />
-        ) : (
-          <>
+      <div className="data-view mobile-card-table clients-data-view">
+        {clientsQuery.isLoading ? <LoadingState message="Loading clients…" />
+          : clientsQuery.isError ? <ErrorState message="Could not load clients." onRetry={() => void clientsQuery.refetch()} />
+          : (clientsQuery.data?.data.length ?? 0) === 0 ? <EmptyState message="Create the first client to start a project." />
+          : (
             <table>
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Company</th>
-                  <th>Email</th>
-                  <th>Phone</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
+              <thead><tr><th>Client</th><th>Contact</th><th>Phone</th><th><span className="sr-only">Actions</span></th></tr></thead>
               <tbody>
                 {clientsQuery.data?.data.map((client) => (
                   <tr key={client.id}>
-                    <td>
-                      <Link to={`/clients/${client.id}`} className="inline-link">
-                        {client.name}
-                      </Link>
-                    </td>
-                    <td>{client.company ?? "-"}</td>
-                    <td>{client.email ?? "-"}</td>
-                    <td>{client.phone ?? "-"}</td>
-                    <td>
-                      <div className="inline-actions">
-                        <button
-                          type="button"
-                          className="ghost-button"
-                          onClick={() => {
-                            setEditingId(client.id);
-                            setName(client.name);
-                            setCompany(client.company ?? "");
-                            setEmail(client.email ?? "");
-                            setPhone(client.phone ?? "");
-                            setNotes(client.notes ?? "");
-                          }}
-                        >
-                          Edit
-                        </button>
-                        <button
-                          type="button"
-                          className="ghost-button"
-                          onClick={() => handleDelete(client.id, client.name)}
-                          disabled={Boolean(deletingClientId)}
-                        >
-                          {deletingClientId === client.id ? "Deleting..." : "Delete"}
-                        </button>
-                      </div>
-                    </td>
+                    <td><Link to={`/clients/${client.id}`} className="row-title">{client.name}</Link><span className="row-subtitle">{client.company ?? "Independent"}</span></td>
+                    <td>{client.email ? <a href={`mailto:${client.email}`}>{client.email}</a> : <span className="muted">Not provided</span>}</td>
+                    <td>{client.phone ?? <span className="muted">—</span>}</td>
+                    <td className="row-action"><button type="button" className="ui-icon-button" aria-label={`Edit ${client.name}`} onClick={() => openEdit(client)}><MoreHorizontal size={16} /></button></td>
                   </tr>
                 ))}
               </tbody>
             </table>
-            <div className="inline-actions" style={{ marginTop: "10px" }}>
-              <button
-                type="button"
-                className="ghost-button"
-                disabled={page <= 1}
-                onClick={() => setListParam("page", String(Math.max(1, page - 1)))}
-              >
-                Previous
-              </button>
-              <p className="muted">Page {page}</p>
-              <button
-                type="button"
-                className="ghost-button"
-                disabled={(clientsQuery.data?.data.length ?? 0) < pageSize}
-                onClick={() => setListParam("page", String(page + 1))}
-              >
-                Next
-              </button>
-            </div>
-          </>
-        )}
+          )}
       </div>
+
+      {(clientsQuery.data?.meta.total ?? 0) > pageSize ? (
+        <div className="pagination">
+          <Button size="sm" disabled={page <= 1} onClick={() => setPage(Math.max(1, page - 1))}>Previous</Button>
+          <span>Page {page}</span>
+          <Button size="sm" disabled={(clientsQuery.data?.data.length ?? 0) < pageSize} onClick={() => setPage(page + 1)}>Next</Button>
+        </div>
+      ) : null}
+
+      <Dialog
+        open={isEditorOpen}
+        onOpenChange={(open) => { if (!open) closeEditor(); else setIsEditorOpen(true); }}
+        title={editingId ? "Edit client" : "New client"}
+        description={editingId ? "Update the organization and primary contact." : "Add an organization before creating its first project."}
+        footer={
+          <div className="dialog-footer-split">
+            <div>{editingId ? <Button variant="danger" disabled={Boolean(deletingClientId)} onClick={() => void handleDelete()}>Delete</Button> : null}</div>
+            <div className="inline-actions">
+              <Button onClick={closeEditor}>Cancel</Button>
+              <Button variant="primary" type="submit" form="client-form" disabled={isSaving || !form.name.trim()}>{isSaving ? "Saving…" : editingId ? "Save changes" : "Create client"}</Button>
+            </div>
+          </div>
+        }
+      >
+        <form id="client-form" className="ui-form" onSubmit={onSubmit}>
+          <label className="field"><span>Name</span><input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} required autoFocus /></label>
+          <label className="field"><span>Company</span><input value={form.company} onChange={(event) => setForm((current) => ({ ...current, company: event.target.value }))} /></label>
+          <div className="ui-form-row">
+            <label className="field"><span>Email</span><input type="email" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} /></label>
+            <label className="field"><span>Phone</span><input value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} /></label>
+          </div>
+          <label className="field"><span>Internal notes</span><textarea rows={3} value={form.notes} onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))} /></label>
+          {formError ? <p className="error-text">{formError}</p> : null}
+        </form>
+      </Dialog>
     </section>
   );
 }

@@ -7,10 +7,13 @@
     "packages/*"
   ],
   "scripts": {
+    "dev": "concurrently -n api,web -c green,cyan \"npm run dev:api\" \"npm run dev:web\"",
     "dev:api": "npm --workspace @adfix/api run dev",
     "dev:web": "npm --workspace @adfix/web run dev",
     "build:api": "npm --workspace @adfix/api run build",
     "build:web": "npm --workspace @adfix/web run build",
+    "build": "npm run build:api && npm run build:web",
+    "start": "npm run start:api",
     "start:api": "npm --workspace @adfix/api run start",
     "preview:web": "npm --workspace @adfix/web run preview",
     "typecheck": "npm --workspace @adfix/api run typecheck",
@@ -18,9 +21,19 @@
     "db:migrate": "npm --workspace @adfix/api run db:migrate",
     "db:seed": "npm --workspace @adfix/api run db:seed",
     "db:seed:demo": "npm --workspace @adfix/api run db:seed:demo",
+    "db:reset:demo": "npm --workspace @adfix/api run db:reset:demo",
     "openapi:export": "npm --workspace @adfix/api run openapi:export",
+    "openapi:types": "openapi-typescript apps/api/openapi/openapi.v1.json -o apps/web/src/generated/api-schema.ts",
+    "openapi:sync": "npm run openapi:export && npm run openapi:types",
     "test:api": "npm --workspace @adfix/api run test",
     "test:api:coverage": "npm --workspace @adfix/api run test:coverage",
-    "test:web": "npm --workspace @adfix/web run test"
+    "test:web": "npm --workspace @adfix/web run test",
+    "test": "npm run test:api && npm run test:web",
+    "check": "npm run typecheck && npm run typecheck:web && npm run test && npm run build"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.3",
+    "openapi-typescript": "^7.13.0",
+    "vitest": "^4.1.10"
   }
 }

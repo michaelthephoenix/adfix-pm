@@ -1,20 +1,46 @@
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
+import {
+  Bell,
+  BriefcaseBusiness,
+  ChartNoAxesCombined,
+  ChevronLeft,
+  ChevronRight,
+  ClipboardList,
+  FileCheck2,
+  LayoutDashboard,
+  Menu,
+  Search,
+  Settings,
+  ShieldCheck,
+  Users,
+  X
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { useAuth } from "../state/auth";
 
-const navItems = [
-  { to: "/dashboard", label: "Dashboard" },
-  { to: "/clients", label: "Clients" },
-  { to: "/projects", label: "Projects" },
-  { to: "/tasks", label: "Tasks" },
-  { to: "/reports", label: "Reports" },
-  { to: "/team", label: "Team" },
-  { to: "/audit-logs", label: "Audit Logs", adminOnly: true }
+type NavItem = { to: string; label: string; icon: LucideIcon; adminOnly?: boolean };
+
+const staffNavItems: NavItem[] = [
+  { to: "/dashboard", label: "Overview", icon: LayoutDashboard },
+  { to: "/projects", label: "Projects", icon: ClipboardList },
+  { to: "/tasks", label: "Tasks", icon: FileCheck2 },
+  { to: "/clients", label: "Clients", icon: BriefcaseBusiness },
+  { to: "/team", label: "Team", icon: Users },
+  { to: "/reports", label: "Reports", icon: ChartNoAxesCombined },
+  { to: "/audit-logs", label: "Audit log", icon: ShieldCheck, adminOnly: true }
+];
+
+const clientNavItems: NavItem[] = [
+  { to: "/portal/projects", label: "Projects", icon: ClipboardList },
+  { to: "/portal/reviews", label: "Reviews", icon: FileCheck2 },
+  { to: "/notifications", label: "Notifications", icon: Bell },
+  { to: "/settings", label: "Profile", icon: Settings }
 ];
 
 function resolveHealthUrl() {
-  const baseUrl = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:4000/api/v1";
-  const parsed = new URL(baseUrl);
+  const baseUrl = import.meta.env.VITE_API_BASE_URL ?? "/api/v1";
+  const parsed = new URL(baseUrl, window.location.origin);
   parsed.pathname = "/api/health";
   parsed.search = "";
   return parsed.toString();
@@ -25,7 +51,7 @@ export function AppShell() {
   const navigate = useNavigate();
   const location = useLocation();
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
     try {
       return localStorage.getItem("adfix.sidebar.collapsed") === "1";
     } catch {
@@ -37,7 +63,10 @@ export function AppShell() {
   const [searchText, setSearchText] = useState("");
   const [isApiHealthy, setIsApiHealthy] = useState<boolean | null>(null);
   const profileMenuRef = useRef<HTMLDivElement | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
   const healthUrlRef = useRef(resolveHealthUrl());
+  const isClient = user?.accountType === "client";
+  const navItems = isClient ? clientNavItems : staffNavItems;
 
   const checkApiHealth = useCallback(async () => {
     try {
@@ -50,8 +79,7 @@ export function AppShell() {
 
   useEffect(() => {
     const onDocumentClick = (event: MouseEvent) => {
-      if (!profileMenuRef.current) return;
-      if (profileMenuRef.current.contains(event.target as Node)) return;
+      if (profileMenuRef.current?.contains(event.target as Node)) return;
       setIsProfileMenuOpen(false);
     };
     document.addEventListener("click", onDocumentClick);
@@ -60,23 +88,25 @@ export function AppShell() {
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
-    if (location.pathname === "/search") {
-      setSearchText(params.get("q") ?? "");
-      return;
-    }
-    setSearchText("");
+    setSearchText(location.pathname === "/search" ? params.get("q") ?? "" : "");
   }, [location.pathname, location.search]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      setIsProfileMenuOpen(false);
-      setIsMobileNavOpen(false);
-      setIsMobileSearchOpen(false);
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k" && !isClient) {
+        event.preventDefault();
+        setIsMobileSearchOpen(true);
+        searchInputRef.current?.focus();
+      }
+      if (event.key === "Escape") {
+        setIsProfileMenuOpen(false);
+        setIsMobileNavOpen(false);
+        setIsMobileSearchOpen(false);
+      }
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, []);
+  }, [isClient]);
 
   useEffect(() => {
     setIsMobileNavOpen(false);
@@ -87,24 +117,20 @@ export function AppShell() {
     try {
       localStorage.setItem("adfix.sidebar.collapsed", isSidebarCollapsed ? "1" : "0");
     } catch {
-      // ignore persistence errors
+      // The preference is optional.
     }
   }, [isSidebarCollapsed]);
 
   useEffect(() => {
     void checkApiHealth();
-    const intervalId = window.setInterval(() => {
-      void checkApiHealth();
-    }, 30_000);
+    const intervalId = window.setInterval(() => void checkApiHealth(), 30_000);
     return () => window.clearInterval(intervalId);
   }, [checkApiHealth]);
 
   const onSubmitGlobalSearch = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const trimmed = searchText.trim();
-    const params = new URLSearchParams();
-    if (trimmed) params.set("q", trimmed);
-    navigate(`/search${params.toString() ? `?${params.toString()}` : ""}`);
+    navigate(trimmed ? `/search?q=${encodeURIComponent(trimmed)}` : "/search");
     setIsMobileSearchOpen(false);
   };
 
@@ -113,154 +139,130 @@ export function AppShell() {
     isSidebarCollapsed ? "sidebar-collapsed" : "",
     isMobileNavOpen ? "mobile-nav-open" : "",
     isMobileSearchOpen ? "mobile-search-open" : ""
-  ]
-    .filter(Boolean)
-    .join(" ");
+  ].filter(Boolean).join(" ");
 
   return (
     <div className={layoutClassName}>
       <aside className="sidebar" id="app-sidebar">
         <div className="sidebar-head">
-          <h1>{isSidebarCollapsed ? "AP" : "Adfix PM"}</h1>
+          <NavLink to={isClient ? "/portal/projects" : "/dashboard"} className="brand-link" aria-label="Adfix home">
+            <span className="brand-mark">A</span>
+            <span className="brand-name">Adfix</span>
+          </NavLink>
           <button
             type="button"
-            className="ghost-button sidebar-toggle"
+            className="ui-icon-button sidebar-toggle"
             onClick={() => setIsSidebarCollapsed((previous) => !previous)}
             aria-label={isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
             aria-expanded={!isSidebarCollapsed}
-            title={isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
-            {isSidebarCollapsed ? ">" : "<"}
+            {isSidebarCollapsed ? <ChevronRight size={15} /> : <ChevronLeft size={15} />}
           </button>
         </div>
-        <nav>
+        <p className="sidebar-section-label">Workspace</p>
+        <nav aria-label={isClient ? "Client navigation" : "Staff navigation"}>
           {navItems
             .filter((item) => !item.adminOnly || user?.isAdmin)
             .map((item) => (
               <NavLink
                 key={item.to}
                 to={item.to}
-                className={({ isActive }) => (isActive ? "nav-link active" : "nav-link")}
+                className={({ isActive }) => isActive ? "nav-link active" : "nav-link"}
                 title={item.label}
-                onClick={() => setIsMobileNavOpen(false)}
               >
+                <item.icon size={16} aria-hidden="true" />
                 <span className="nav-link-text">{item.label}</span>
               </NavLink>
             ))}
         </nav>
+        <div className="sidebar-footer">
+          <span className="workspace-dot" />
+          <span className="nav-link-text">{isClient ? "Client portal" : "Adfix workspace"}</span>
+        </div>
       </aside>
+
       <main className="content">
         <header className="topbar">
           <button
             type="button"
-            className="icon-button mobile-menu-button"
+            className="ui-icon-button mobile-menu-button"
             onClick={() => setIsMobileNavOpen((previous) => !previous)}
             aria-label={isMobileNavOpen ? "Close menu" : "Open menu"}
             aria-expanded={isMobileNavOpen}
             aria-controls="app-sidebar"
-            title={isMobileNavOpen ? "Close menu" : "Open menu"}
           >
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              {isMobileNavOpen ? (
-                <path d="M18.3 5.7a1 1 0 0 0-1.4 0L12 10.6 7.1 5.7a1 1 0 0 0-1.4 1.4l4.9 4.9-4.9 4.9a1 1 0 1 0 1.4 1.4l4.9-4.9 4.9 4.9a1 1 0 0 0 1.4-1.4L13.4 12l4.9-4.9a1 1 0 0 0 0-1.4Z" />
-              ) : (
-                <path d="M4 6.5a1 1 0 0 1 1-1h14a1 1 0 1 1 0 2H5a1 1 0 0 1-1-1Zm0 5.5a1 1 0 0 1 1-1h14a1 1 0 1 1 0 2H5a1 1 0 0 1-1-1Zm1 4.5a1 1 0 1 0 0 2h14a1 1 0 1 0 0-2H5Z" />
-              )}
-            </svg>
+            {isMobileNavOpen ? <X size={18} /> : <Menu size={18} />}
           </button>
-          <form className="topbar-search" onSubmit={onSubmitGlobalSearch} id="global-search-form">
-            <input
-              value={searchText}
-              onChange={(event) => setSearchText(event.target.value)}
-              placeholder="Search..."
-              aria-label="Global search"
-            />
-          </form>
+
+          {!isClient ? (
+            <form className="topbar-search" onSubmit={onSubmitGlobalSearch} id="global-search-form">
+              <Search size={15} aria-hidden="true" />
+              <input
+                ref={searchInputRef}
+                value={searchText}
+                onChange={(event) => setSearchText(event.target.value)}
+                placeholder="Search workspace"
+                aria-label="Global search"
+              />
+              <kbd>Ctrl K</kbd>
+            </form>
+          ) : <div className="topbar-spacer" />}
+
           <div className="topbar-actions">
-            <div className={`api-health-pill ${isApiHealthy === false ? "offline" : "online"}`}>
-              <span className="api-health-dot" />
-              <span>{isApiHealthy === false ? "API Offline" : "API Online"}</span>
-              {isApiHealthy === false ? (
-                <button type="button" className="ghost-button health-retry" onClick={() => void checkApiHealth()}>
-                  Retry
-                </button>
-              ) : null}
-            </div>
-            <button
-              type="button"
-              className="icon-button mobile-search-button"
-              onClick={() => setIsMobileSearchOpen((previous) => !previous)}
-              aria-label={isMobileSearchOpen ? "Hide search" : "Show search"}
-              aria-expanded={isMobileSearchOpen}
-              aria-controls="global-search-form"
-              title={isMobileSearchOpen ? "Hide search" : "Show search"}
-            >
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M10.5 3a7.5 7.5 0 0 1 5.98 12.03l4.74 4.74a1 1 0 1 1-1.42 1.42l-4.74-4.74A7.5 7.5 0 1 1 10.5 3Zm0 2a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11Z" />
-              </svg>
-            </button>
-            <NavLink
-              to="/notifications"
-              className={({ isActive }) => (isActive ? "icon-button active" : "icon-button")}
-              aria-label="Notifications"
-              title="Notifications"
-            >
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M12 22a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22Zm7-5H5a1 1 0 0 1-.8-1.6l1.3-1.73V10a6.5 6.5 0 0 1 5-6.3V3a1.5 1.5 0 0 1 3 0v.7a6.5 6.5 0 0 1 5 6.3v3.67l1.3 1.73A1 1 0 0 1 19 17Z" />
-              </svg>
+            {isApiHealthy === false ? (
+              <button type="button" className="api-offline" onClick={() => void checkApiHealth()}>
+                <span className="api-health-dot" /> Offline · Retry
+              </button>
+            ) : null}
+            {!isClient ? (
+              <button
+                type="button"
+                className="ui-icon-button mobile-search-button"
+                onClick={() => setIsMobileSearchOpen((previous) => !previous)}
+                aria-label={isMobileSearchOpen ? "Hide search" : "Show search"}
+                aria-expanded={isMobileSearchOpen}
+                aria-controls="global-search-form"
+              >
+                <Search size={17} />
+              </button>
+            ) : null}
+            <NavLink to="/notifications" className="ui-icon-button" aria-label="Notifications" title="Notifications">
+              <Bell size={17} />
             </NavLink>
             <div className="profile-menu-wrap" ref={profileMenuRef}>
               <button
                 type="button"
                 className="profile-trigger"
                 onClick={() => setIsProfileMenuOpen((previous) => !previous)}
+                aria-label={user?.name ?? "Account"}
                 aria-haspopup="menu"
                 aria-expanded={isProfileMenuOpen}
                 aria-controls="profile-menu"
               >
                 {user?.avatarUrl ? (
-                  <img src={user.avatarUrl} alt={`${user.name} avatar`} className="avatar" />
+                  <img src={user.avatarUrl} alt="" className="avatar" />
                 ) : (
-                  <div className="avatar avatar-fallback">{(user?.name ?? "?").slice(0, 1).toUpperCase()}</div>
+                  <span className="avatar avatar-fallback">{(user?.name ?? "?").slice(0, 1).toUpperCase()}</span>
                 )}
-                <span>{user?.name}</span>
               </button>
               {isProfileMenuOpen ? (
-                <div className="profile-menu" id="profile-menu">
-                  <button
-                    type="button"
-                    className="profile-menu-item"
-                    onClick={() => {
-                      setIsProfileMenuOpen(false);
-                      navigate("/settings");
-                    }}
-                  >
-                    Settings
-                  </button>
-                  <button
-                    type="button"
-                    className="profile-menu-item"
-                    onClick={() => {
-                      setIsProfileMenuOpen(false);
-                      logout();
-                    }}
-                  >
-                    Logout
-                  </button>
+                <div className="profile-menu" id="profile-menu" role="menu">
+                  <div className="profile-menu-identity">
+                    <strong>{user?.name}</strong>
+                    <span>{user?.email}</span>
+                  </div>
+                  <button type="button" className="profile-menu-item" role="menuitem" onClick={() => { setIsProfileMenuOpen(false); navigate("/settings"); }}>Settings</button>
+                  <button type="button" className="profile-menu-item danger" role="menuitem" onClick={() => { setIsProfileMenuOpen(false); logout(); }}>Logout</button>
                 </div>
               ) : null}
             </div>
           </div>
         </header>
-        <Outlet />
+        <div className="page-frame"><Outlet /></div>
       </main>
+
       {isMobileNavOpen ? (
-        <button
-          type="button"
-          className="mobile-nav-backdrop"
-          aria-label="Close navigation menu"
-          onClick={() => setIsMobileNavOpen(false)}
-        />
+        <button type="button" className="mobile-nav-backdrop" aria-label="Close navigation menu" onClick={() => setIsMobileNavOpen(false)} />
       ) : null}
     </div>
   );

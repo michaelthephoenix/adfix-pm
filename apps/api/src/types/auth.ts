@@ -3,4 +3,5 @@ export type AuthenticatedUser = {
   email: string;
   name: string;
   isAdmin: boolean;
+  accountType: "staff" | "client";
 };

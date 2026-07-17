@@ -1,8 +1,9 @@
 import bcrypt from "bcryptjs";
 import request from "supertest";
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../../src/app.js";
-import { pool } from "../../src/db/pool.js";
+import { runMigrations } from "../../src/db/migrations.js";
+import { closeDatabase, pool } from "../../src/db/pool.js";
 
 type LoginResult = {
   accessToken: string;
@@ -16,6 +17,8 @@ const adminUser = {
   name: "Adfix Admin",
   password: "ChangeMe123!"
 };
+
+beforeAll(runMigrations);
 
 async function resetDatabase() {
   await pool.query(
@@ -56,7 +59,7 @@ beforeEach(async () => {
 });
 
 afterAll(async () => {
-  await pool.end();
+  await closeDatabase();
 });
 
 describe("API integration", () => {
@@ -471,6 +474,15 @@ describe("API integration", () => {
     expect(projectResponse.status).toBe(201);
     const projectId = projectResponse.body.data.id as string;
 
+    const adminIdResult = await pool.query<{ id: string }>("SELECT id FROM users WHERE email = $1", [adminUser.email]);
+    const collaboratorResult = await pool.query<{ id: string }>(
+      `INSERT INTO users (email, name, password_hash, is_active, created_at, updated_at)
+       VALUES ('collaborator@adfix.local', 'Task Collaborator', 'not-used', TRUE, NOW(), NOW())
+       RETURNING id`
+    );
+    const adminId = adminIdResult.rows[0].id;
+    const collaboratorId = collaboratorResult.rows[0].id;
+
     const taskA = await request(app)
       .post("/api/tasks")
       .set("Authorization", `Bearer ${auth.accessToken}`)
@@ -478,7 +490,12 @@ describe("API integration", () => {
         projectId,
         title: "Overdue pending task",
         phase: "production",
-        dueDate: "2020-01-01"
+        dueDate: "2020-01-01",
+        assigneeIds: [adminId, collaboratorId],
+        labels: [
+          { name: "Client feedback", color: "violet" },
+          { name: "Needs copy", color: "amber" }
+        ]
       });
 
     const taskB = await request(app)
@@ -507,6 +524,16 @@ describe("API integration", () => {
     const taskBId = taskB.body.data.id as string;
     const taskCId = taskC.body.data.id as string;
 
+    expect(taskA.body.data.assignees.map((assignee: { id: string }) => assignee.id)).toEqual([adminId, collaboratorId]);
+    expect(taskA.body.data.labels.map((label: { name: string }) => label.name)).toEqual(["Client feedback", "Needs copy"]);
+
+    const collaboratorTasks = await request(app)
+      .get(`/api/tasks?projectId=${projectId}&assignedTo=${collaboratorId}`)
+      .set("Authorization", `Bearer ${auth.accessToken}`);
+
+    expect(collaboratorTasks.status).toBe(200);
+    expect(collaboratorTasks.body.data.map((task: { id: string }) => task.id)).toContain(taskAId);
+
     const createComment = await request(app)
       .post(`/api/tasks/${taskBId}/comments`)
       .set("Authorization", `Bearer ${auth.accessToken}`)
@@ -532,6 +559,24 @@ describe("API integration", () => {
 
     expect(updateTaskA.status).toBe(200);
     expect(updateTaskA.body.data.description).toBe("Updated details");
+
+    const updateTaskCollaboration = await request(app)
+      .put(`/api/tasks/${taskAId}`)
+      .set("Authorization", `Bearer ${auth.accessToken}`)
+      .send({
+        assigneeIds: [collaboratorId],
+        labels: [
+          { name: "Client feedback", color: "blue" },
+          { name: "Ready for review", color: "green" }
+        ]
+      });
+
+    expect(updateTaskCollaboration.status).toBe(200);
+    expect(updateTaskCollaboration.body.data.assignees.map((assignee: { id: string }) => assignee.id)).toEqual([collaboratorId]);
+    expect(updateTaskCollaboration.body.data.labels).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: "Client feedback", color: "blue" }),
+      expect.objectContaining({ name: "Ready for review", color: "green" })
+    ]));
 
     const taskBInProgress = await request(app)
       .patch(`/api/tasks/${taskBId}/status`)
@@ -631,7 +676,7 @@ describe("API integration", () => {
     );
 
     expect(counts.task_created).toBe(3);
-    expect(counts.task_updated).toBe(1);
+    expect(counts.task_updated).toBe(2);
     expect(counts.task_status_changed).toBe(4);
     expect(counts.task_deleted).toBe(1);
     expect(counts.task_comment_created).toBe(1);
@@ -1004,6 +1049,33 @@ describe("API integration", () => {
       [outsiderPasswordHash]
     );
     const outsiderAuth = await loginAs("outsider-admin-controls@adfix.local", "OutsiderPass123!");
+
+    const outsiderCreateStaff = await request(app)
+      .post("/api/users")
+      .set("Authorization", `Bearer ${outsiderAuth.accessToken}`)
+      .send({ name: "Blocked Staff", email: "blocked-staff@adfix.local", password: "BlockedPass123!" });
+    expect(outsiderCreateStaff.status).toBe(403);
+
+    const createStaff = await request(app)
+      .post("/api/users")
+      .set("Authorization", `Bearer ${adminAuth.accessToken}`)
+      .send({ name: "Created Staff", email: "created-staff@adfix.local", password: "CreatedPass123!", isAdmin: false });
+    expect(createStaff.status).toBe(201);
+    expect(createStaff.body.data.account_type).toBe("staff");
+    expect(createStaff.body.data.is_admin).toBe(false);
+
+    const duplicateStaff = await request(app)
+      .post("/api/users")
+      .set("Authorization", `Bearer ${adminAuth.accessToken}`)
+      .send({ name: "Created Staff", email: "created-staff@adfix.local", password: "CreatedPass123!" });
+    expect(duplicateStaff.status).toBe(409);
+
+    const createdStaffAuth = await loginAs("created-staff@adfix.local", "CreatedPass123!");
+    const createdStaffMe = await request(app)
+      .get("/api/auth/me")
+      .set("Authorization", `Bearer ${createdStaffAuth.accessToken}`);
+    expect(createdStaffMe.status).toBe(200);
+    expect(createdStaffMe.body.user.accountType).toBe("staff");
 
     const clientResponse = await request(app)
       .post("/api/clients")
@@ -1743,5 +1815,112 @@ describe("API integration", () => {
 
     expect(Number(bulkStatusLogs.rows[0].count)).toBe(3);
     expect(Number(bulkDeleteLogs.rows[0].count)).toBe(3);
+  });
+
+  it("client portal: invitation, isolation, deliverable review, and Delivery freeze", async () => {
+    const staff = await login();
+    const client = await request(app).post("/api/clients")
+      .set("Authorization", `Bearer ${staff.accessToken}`)
+      .send({ name: "Portal Client" });
+    const otherClient = await request(app).post("/api/clients")
+      .set("Authorization", `Bearer ${staff.accessToken}`)
+      .send({ name: "Other Client" });
+    const project = await request(app).post("/api/projects")
+      .set("Authorization", `Bearer ${staff.accessToken}`)
+      .send({ clientId: client.body.data.id, name: "Portal Campaign", startDate: "2026-07-01", deadline: "2026-09-01" });
+    const otherProject = await request(app).post("/api/projects")
+      .set("Authorization", `Bearer ${staff.accessToken}`)
+      .send({ clientId: otherClient.body.data.id, name: "Secret Campaign", startDate: "2026-07-01", deadline: "2026-09-01" });
+
+    const invitation = await request(app).post("/api/client-invitations")
+      .set("Authorization", `Bearer ${staff.accessToken}`)
+      .send({ clientId: client.body.data.id, email: "reviewer@example.com", role: "reviewer" });
+    expect(invitation.status).toBe(201);
+    const token = String(invitation.body.data.inviteUrl).split("/invite/")[1];
+    const accepted = await request(app).post(`/api/client-invitations/token/${token}/accept`)
+      .send({ name: "Client Reviewer", password: "Reviewer123!" });
+    expect(accepted.status).toBe(201);
+    expect(accepted.body.user.accountType).toBe("client");
+    const clientToken = accepted.body.accessToken as string;
+
+    const reused = await request(app).post(`/api/client-invitations/token/${token}/accept`)
+      .send({ name: "Client Reviewer", password: "Reviewer123!" });
+    expect(reused.status).toBe(404);
+    const portalList = await request(app).get("/api/client-portal/projects")
+      .set("Authorization", `Bearer ${clientToken}`);
+    expect(portalList.status).toBe(200);
+    expect(portalList.body.data.map((item: { id: string }) => item.id)).toEqual([project.body.data.id]);
+    expect(portalList.body.data[0].client_role).toBe("reviewer");
+    const isolated = await request(app).get(`/api/client-portal/projects/${otherProject.body.data.id}`)
+      .set("Authorization", `Bearer ${clientToken}`);
+    expect(isolated.status).toBe(404);
+    const internalProjects = await request(app).get("/api/projects")
+      .set("Authorization", `Bearer ${clientToken}`);
+    expect(internalProjects.status).toBe(403);
+
+    const deliverable = await request(app).post("/api/deliverables")
+      .set("Authorization", `Bearer ${staff.accessToken}`)
+      .send({ projectId: project.body.data.id, title: "Campaign master" });
+    const upload = await request(app).post("/api/files/upload-binary")
+      .set("Authorization", `Bearer ${staff.accessToken}`)
+      .field("projectId", project.body.data.id)
+      .field("fileType", "deliverable")
+      .attach("file", Buffer.from("local prototype deliverable"), { filename: "campaign.txt", contentType: "text/plain" });
+    expect(upload.status).toBe(201);
+    expect(upload.body.data.checksum_sha256).toMatch(/^[a-f0-9]{64}$/);
+    const version = await request(app).post(`/api/deliverables/${deliverable.body.data.id}/versions`)
+      .set("Authorization", `Bearer ${staff.accessToken}`)
+      .send({ fileId: upload.body.data.id, submissionNote: "Ready for review" });
+    expect(version.status).toBe(201);
+
+    const viewerInvitation = await request(app).post("/api/client-invitations")
+      .set("Authorization", `Bearer ${staff.accessToken}`)
+      .send({ clientId: client.body.data.id, email: "viewer@example.com", role: "viewer" });
+    expect(viewerInvitation.status).toBe(201);
+    const viewerToken = String(viewerInvitation.body.data.inviteUrl).split("/invite/")[1];
+    const viewerAccepted = await request(app).post(`/api/client-invitations/token/${viewerToken}/accept`)
+      .send({ name: "Client Viewer", password: "ViewerPass123!" });
+    expect(viewerAccepted.status).toBe(201);
+    const viewerAccessToken = viewerAccepted.body.accessToken as string;
+
+    const clientAccessList = await request(app).get("/api/client-invitations")
+      .set("Authorization", `Bearer ${staff.accessToken}`);
+    expect(clientAccessList.status).toBe(200);
+    expect(clientAccessList.body.data.filter((item: { status: string }) => item.status === "active").length).toBe(2);
+
+    const viewerProject = await request(app).get(`/api/client-portal/projects/${project.body.data.id}`)
+      .set("Authorization", `Bearer ${viewerAccessToken}`);
+    expect(viewerProject.status).toBe(200);
+    expect(viewerProject.body.data.client_role).toBe("viewer");
+
+    const viewerReview = await request(app).post(`/api/client-portal/versions/${version.body.data.id}/reviews`)
+      .set("Authorization", `Bearer ${viewerAccessToken}`)
+      .send({ decision: "approved" });
+    expect(viewerReview.status).toBe(403);
+
+    const missingComment = await request(app).post(`/api/client-portal/versions/${version.body.data.id}/reviews`)
+      .set("Authorization", `Bearer ${clientToken}`)
+      .send({ decision: "changes_requested" });
+    expect(missingComment.status).toBe(400);
+    const approval = await request(app).post(`/api/client-portal/versions/${version.body.data.id}/reviews`)
+      .set("Authorization", `Bearer ${clientToken}`)
+      .send({ decision: "approved" });
+    expect(approval.status).toBe(201);
+
+    for (const phase of ["strategy_planning", "production", "post_production", "delivery"]) {
+      const transition = await request(app).patch(`/api/projects/${project.body.data.id}/phase`)
+        .set("Authorization", `Bearer ${staff.accessToken}`)
+        .send({ phase });
+      expect(transition.status).toBe(200);
+    }
+    const frozen = await request(app).post(`/api/client-portal/versions/${version.body.data.id}/reviews`)
+      .set("Authorization", `Bearer ${clientToken}`)
+      .send({ decision: "changes_requested", comment: "Too late" });
+    expect(frozen.status).toBe(409);
+
+    const downloaded = await request(app).get(`/api/files/${upload.body.data.id}/content`)
+      .set("Authorization", `Bearer ${clientToken}`);
+    expect(downloaded.status).toBe(200);
+    expect(downloaded.headers["content-disposition"]).toContain("campaign.txt");
   });
 });

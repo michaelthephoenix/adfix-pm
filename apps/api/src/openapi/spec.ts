@@ -40,7 +40,10 @@ export function buildOpenApiSpec(baseUrl: string) {
       { name: "search" },
       { name: "users" },
       { name: "admin" },
-      { name: "notifications" }
+      { name: "notifications" },
+      { name: "invitations" }
+      ,{ name: "client portal" }
+      ,{ name: "deliverables" }
     ],
     components: {
       securitySchemes: {
@@ -335,6 +338,20 @@ export function buildOpenApiSpec(baseUrl: string) {
           responses: { "201": { description: "Uploaded file created" }, ...errorResponses }
         }
       }),
+      "/files/upload-binary": withAuth({
+        post: {
+          tags: ["files"],
+          summary: "Upload a local project file (multipart, maximum 50 MB)",
+          responses: { "201": { description: "File stored and registered" }, ...errorResponses }
+        }
+      }),
+      "/files/{id}/content": withAuth({
+        get: {
+          tags: ["files"],
+          summary: "Authorize and stream file content",
+          responses: { "200": { description: "File content" }, ...errorResponses }
+        }
+      }),
       "/files/upload-url": withAuth({
         post: {
           tags: ["files"],
@@ -436,11 +453,106 @@ export function buildOpenApiSpec(baseUrl: string) {
         }
       }),
 
+      "/client-invitations": withAuth({
+        get: {
+          tags: ["invitations"],
+          summary: "List client portal memberships and pending invitations",
+          responses: { "200": { description: "Client access list" }, ...errorResponses }
+        },
+        post: {
+          tags: ["invitations"],
+          summary: "Create a seven-day client invitation",
+          responses: { "201": { description: "Invitation and one-time URL" }, ...errorResponses }
+        }
+      }),
+      "/client-invitations/client/{clientId}": withAuth({
+        get: {
+          tags: ["invitations"],
+          summary: "List invitations for a client organization",
+          responses: { "200": { description: "Invitation list" }, ...errorResponses }
+        }
+      }),
+      "/client-invitations/{id}": withAuth({
+        delete: {
+          tags: ["invitations"],
+          summary: "Revoke an invitation",
+          responses: { "204": { description: "Invitation revoked" }, ...errorResponses }
+        }
+      }),
+      "/client-invitations/token/{token}": {
+        get: {
+          tags: ["invitations"],
+          summary: "Inspect an invitation before acceptance",
+          responses: { "200": { description: "Sanitized invitation details" }, ...errorResponses }
+        }
+      },
+      "/client-invitations/token/{token}/accept": {
+        post: {
+          tags: ["invitations"],
+          summary: "Accept invitation and create client account",
+          responses: { "201": { description: "Client membership and session created" }, ...errorResponses }
+        }
+      },
+      "/client-invitations/token/{token}/accept-existing": withAuth({
+        post: {
+          tags: ["invitations"],
+          summary: "Accept invitation with the signed-in invited account",
+          responses: { "200": { description: "Client membership created" }, ...errorResponses }
+        }
+      }),
+      "/deliverables": withAuth({
+        post: {
+          tags: ["deliverables"],
+          summary: "Create a project deliverable",
+          responses: { "201": { description: "Deliverable created" }, ...errorResponses }
+        }
+      }),
+      "/deliverables/project/{projectId}": withAuth({
+        get: {
+          tags: ["deliverables"],
+          summary: "List deliverables, versions, and reviews",
+          responses: { "200": { description: "Deliverable list" }, ...errorResponses }
+        }
+      }),
+      "/deliverables/{id}/versions": withAuth({
+        post: {
+          tags: ["deliverables"],
+          summary: "Submit a numbered deliverable version for review",
+          responses: { "201": { description: "Version submitted" }, ...errorResponses }
+        }
+      }),
+      "/client-portal/projects": withAuth({
+        get: {
+          tags: ["client portal"],
+          summary: "List signed-in client's projects",
+          responses: { "200": { description: "Sanitized client project list" }, ...errorResponses }
+        }
+      }),
+      "/client-portal/projects/{projectId}": withAuth({
+        get: {
+          tags: ["client portal"],
+          summary: "Get sanitized client project detail",
+          responses: { "200": { description: "Client project detail" }, ...errorResponses }
+        }
+      }),
+      "/client-portal/versions/{versionId}/reviews": withAuth({
+        post: {
+          tags: ["client portal"],
+          summary: "Approve or request changes on the latest version",
+          responses: { "201": { description: "Review recorded" }, ...errorResponses }
+        }
+      }),
+
       "/users": withAuth({
         get: {
           tags: ["users"],
           summary: "List users",
           responses: { "200": { description: "Users list" }, ...errorResponses }
+        },
+        post: {
+          tags: ["admin"],
+          summary: "Admin: create a staff account",
+          responses: { "201": { description: "Staff account created" }, ...errorResponses }
         }
       }),
       "/users/{id}": withAuth({

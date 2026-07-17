@@ -32,6 +32,7 @@ export function corsMiddleware(req: AuthenticatedRequest, res: Response, next: N
       req.header("access-control-request-headers") ?? DEFAULT_ALLOWED_HEADERS
     );
     res.setHeader("Access-Control-Expose-Headers", EXPOSED_HEADERS);
+    res.setHeader("Access-Control-Allow-Credentials", "true");
   }
 
   if (req.method === "OPTIONS") {

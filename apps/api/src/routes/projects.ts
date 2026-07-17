@@ -417,6 +417,7 @@ projectsRouter.patch("/:id/phase", async (req: AuthenticatedRequest, res) => {
   if (!req.user) {
     return sendUnauthorized(res, "Unauthorized");
   }
+  const actorUserId = req.user.id;
 
   const existingProject = await getProjectById(parsedParams.data.id);
   if (!existingProject) {
@@ -468,7 +469,7 @@ projectsRouter.patch("/:id/phase", async (req: AuthenticatedRequest, res) => {
             projectId: parsedParams.data.id,
             fromPhase: existingProject.current_phase,
             toPhase: parsed.data.phase,
-            changedByUserId: req.user.id
+            changedByUserId: actorUserId
           }
         })
       )

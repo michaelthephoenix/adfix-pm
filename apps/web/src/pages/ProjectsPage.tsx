@@ -1,6 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FormEvent, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { CalendarDays, Check, Plus, Users } from "lucide-react";
+import { Button } from "../components/ui/Button";
+import { Dialog } from "../components/ui/Dialog";
+import { PageHeader } from "../components/ui/PageHeader";
 import { apiRequest, ApiError } from "../lib/api";
 import { useAuth } from "../state/auth";
 import { ErrorState, LoadingState } from "../components/States";
@@ -41,6 +45,13 @@ type UsersResponse = {
   }>;
 };
 
+const createSteps = [
+  { label: "Client", description: "Choose who this work is for" },
+  { label: "Project", description: "Name and describe the work" },
+  { label: "Schedule", description: "Set priority and delivery dates" },
+  { label: "Team", description: "Assign the initial project team" }
+] as const;
+
 function toIsoDateString(date: Date) {
   return date.toISOString().slice(0, 10);
 }
@@ -63,7 +74,8 @@ export function ProjectsPage() {
   const [teamRole, setTeamRole] = useState<"manager" | "member" | "viewer">("member");
   const [teamAssignments, setTeamAssignments] = useState<Array<{ userId: string; role: "manager" | "member" | "viewer" }>>([]);
   const [formError, setFormError] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
+  const [createStep, setCreateStep] = useState(0);
 
   const listPage = Number(searchParams.get("page") ?? "1") || 1;
   const listSortBy = searchParams.get("sortBy") ?? "updatedAt";
@@ -75,7 +87,7 @@ export function ProjectsPage() {
   const listQueryString = useMemo(() => {
     const params = new URLSearchParams({
       page: String(listPage),
-      pageSize: "25",
+      pageSize: "100",
       sortBy: listSortBy,
       sortOrder: listSortOrder
     });
@@ -119,6 +131,17 @@ export function ProjectsPage() {
     const hasClient = creatingNewClient ? Boolean(newClientName.trim()) : Boolean(clientSelection);
     return Boolean(hasClient && name.trim() && startDate && deadline && deadlineIsValid);
   }, [clientSelection, creatingNewClient, deadline, deadlineIsValid, name, newClientName, startDate]);
+
+  const selectedClientName = creatingNewClient
+    ? newClientName.trim() || "New client"
+    : clientsQuery.data?.data.find((client) => client.id === clientSelection)?.name ?? "Not selected";
+
+  const createStepIsValid = [
+    creatingNewClient ? Boolean(newClientName.trim()) : Boolean(clientSelection),
+    Boolean(name.trim()),
+    Boolean(startDate && deadline && deadlineIsValid),
+    true
+  ][createStep];
 
   const createProjectMutation = useMutation({
     mutationFn: async () => {
@@ -166,7 +189,7 @@ export function ProjectsPage() {
 
       return { projectId: createdProject.data.id, projectName: name.trim() };
     },
-    onSuccess: async (result) => {
+    onSuccess: async () => {
       setName("");
       setDescription("");
       setPriority("medium");
@@ -177,7 +200,8 @@ export function ProjectsPage() {
       setNewClientName("");
       setNewClientCompany("");
       setFormError(null);
-      setSuccessMessage(`Project "${result.projectName}" created successfully.`);
+      setShowCreate(false);
+      setCreateStep(0);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["projects"] }),
         queryClient.invalidateQueries({ queryKey: ["clients-for-project-form"] })
@@ -189,13 +213,11 @@ export function ProjectsPage() {
         return;
       }
       setFormError("Could not create project.");
-      setSuccessMessage(null);
     }
   });
 
   const handleCreateProject = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setSuccessMessage(null);
     if (!deadlineIsValid) {
       setFormError("Deadline must be on or after the start date.");
       return;
@@ -212,6 +234,26 @@ export function ProjectsPage() {
     });
     setTeamUserId("");
     setTeamRole("member");
+  };
+
+  const openCreateProject = () => {
+    setFormError(null);
+    setCreateStep(0);
+    setShowCreate(true);
+  };
+
+  const handleCreateDialogChange = (open: boolean) => {
+    setShowCreate(open);
+    if (!open) {
+      setCreateStep(0);
+      setFormError(null);
+    }
+  };
+
+  const continueCreateProject = () => {
+    if (!createStepIsValid) return;
+    setFormError(null);
+    setCreateStep((current) => Math.min(current + 1, createSteps.length - 1));
   };
 
   const setListParam = (key: "page" | "sortBy" | "sortOrder" | "clientId" | "phase" | "priority", value: string) => {
@@ -236,6 +278,15 @@ export function ProjectsPage() {
     setSearchParams(next, { replace: true });
   };
 
+  const setListSort = (value: string) => {
+    const [sortByValue, sortOrderValue] = value.split(":");
+    const next = new URLSearchParams(searchParams);
+    next.set("sortBy", sortByValue);
+    next.set("sortOrder", sortOrderValue);
+    next.set("page", "1");
+    setSearchParams(next, { replace: true });
+  };
+
   if (projectsQuery.isLoading) {
     return <LoadingState message="Loading projects..." />;
   }
@@ -246,113 +297,118 @@ export function ProjectsPage() {
 
   return (
     <section>
-      <div className="section-head">
-        <h2>Projects</h2>
-        <p className="muted">{projectsQuery.data?.meta.total ?? 0} visible projects</p>
-      </div>
-      <form className="card task-create-form" onSubmit={handleCreateProject}>
-        <h3>Create project</h3>
-        {clientsQuery.isError ? <p className="error-text">Could not load clients for selection.</p> : null}
-        {usersQuery.isError ? <p className="error-text">Could not load users for team assignment.</p> : null}
-        <div className="project-form-grid">
-          <select value={clientSelection} onChange={(event) => setClientSelection(event.target.value)} required>
-            <option value="">Select client</option>
-            <option value="__new__">+ Create new client</option>
-            {clientsQuery.data?.data.map((client) => (
-              <option key={client.id} value={client.id}>
-                {client.name}
-              </option>
-            ))}
-          </select>
-          {creatingNewClient ? (
-            <>
-              <input
-                placeholder="New client name"
-                value={newClientName}
-                onChange={(event) => setNewClientName(event.target.value)}
-                required
-              />
-              <input
-                placeholder="Client company (optional)"
-                value={newClientCompany}
-                onChange={(event) => setNewClientCompany(event.target.value)}
-              />
-            </>
-          ) : null}
-          <input
-            placeholder="Project name"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            required
-          />
-          <select value={priority} onChange={(event) => setPriority(event.target.value)}>
-            <option value="low">low</option>
-            <option value="medium">medium</option>
-            <option value="high">high</option>
-            <option value="urgent">urgent</option>
-          </select>
-          <input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} required />
-          <input type="date" value={deadline} onChange={(event) => setDeadline(event.target.value)} required />
-          <button className="primary-button" type="submit" disabled={!canSubmit || createProjectMutation.isPending}>
-            Create
-          </button>
-        </div>
-        {!deadlineIsValid ? <p className="error-text">Deadline must be on or after the start date.</p> : null}
-        <div className="project-team-builder">
-          <div className="task-form-grid">
-            <select value={teamUserId} onChange={(event) => setTeamUserId(event.target.value)}>
-              <option value="">Add team member (optional)</option>
-              {usersQuery.data?.data.map((user) => (
-                <option key={user.id} value={user.id}>
-                  {user.name} ({user.email})
-                </option>
-              ))}
-            </select>
-            <select value={teamRole} onChange={(event) => setTeamRole(event.target.value as "manager" | "member" | "viewer")}>
-              <option value="manager">manager</option>
-              <option value="member">member</option>
-              <option value="viewer">viewer</option>
-            </select>
-            <button type="button" className="ghost-button" onClick={addTeamAssignment} disabled={!teamUserId}>
-              Add member
-            </button>
-          </div>
-          {teamAssignments.length > 0 ? (
-            <div className="assignment-list">
-              {teamAssignments.map((assignment) => {
-                const user = usersQuery.data?.data.find((item) => item.id === assignment.userId);
-                return (
-                  <div key={assignment.userId} className="assignment-item">
-                    <p>
-                      {user?.name ?? assignment.userId} ({assignment.role})
-                    </p>
-                    <button
-                      type="button"
-                      className="ghost-button"
-                      onClick={() =>
-                        setTeamAssignments((previous) =>
-                          previous.filter((item) => item.userId !== assignment.userId)
-                        )
-                      }
-                    >
-                      Remove
-                    </button>
-                  </div>
-                );
-              })}
+      <PageHeader
+        title="Projects"
+        description="Open a project to manage its tasks across the five delivery phases."
+        meta={<span>{projectsQuery.data?.meta.total ?? 0}</span>}
+        actions={<Button variant="primary" icon={<Plus size={15} />} onClick={openCreateProject}>Create project</Button>}
+      />
+
+      <Dialog
+        open={showCreate}
+        onOpenChange={handleCreateDialogChange}
+        title="Create a project"
+        description={`Step ${createStep + 1} of ${createSteps.length} · ${createSteps[createStep].description}`}
+        size="lg"
+        footer={
+          <div className="dialog-footer-split project-wizard-footer">
+            <Button variant="ghost" onClick={() => handleCreateDialogChange(false)}>Cancel</Button>
+            <div className="inline-actions">
+              {createStep > 0 ? <Button onClick={() => setCreateStep((current) => current - 1)}>Back</Button> : null}
+              {createStep < createSteps.length - 1 ? (
+                <Button variant="primary" onClick={continueCreateProject} disabled={!createStepIsValid}>Continue</Button>
+              ) : (
+                <Button variant="primary" type="submit" form="project-create-form" disabled={!canSubmit || createProjectMutation.isPending}>
+                  {createProjectMutation.isPending ? "Creating…" : "Create project"}
+                </Button>
+              )}
             </div>
-          ) : null}
-        </div>
-        <input
-          placeholder="Description (optional)"
-          value={description}
-          onChange={(event) => setDescription(event.target.value)}
-        />
-        {formError ? <p className="error-text">{formError}</p> : null}
-        {successMessage ? <p>{successMessage}</p> : null}
+          </div>
+        }
+      >
+      <form id="project-create-form" className="ui-form project-wizard" onSubmit={handleCreateProject}>
+        <ol className="project-create-steps" aria-label="Project creation progress">
+          {createSteps.map((step, index) => (
+            <li key={step.label} className={index === createStep ? "active" : index < createStep ? "complete" : ""} aria-current={index === createStep ? "step" : undefined}>
+              <span>{index < createStep ? <Check size={13} /> : index + 1}</span>
+              <div><strong>{step.label}</strong><small>{step.description}</small></div>
+            </li>
+          ))}
+        </ol>
+        {createStep === 0 ? (
+          <section className="project-create-step" aria-labelledby="project-client-step">
+            <div className="wizard-step-heading"><h3 id="project-client-step">Select a client</h3><p>Choose an existing client or create a new one without leaving this flow.</p></div>
+            {clientsQuery.isError ? <p className="error-text">Could not load clients for selection.</p> : null}
+            <label className="field"><span>Client</span><select value={clientSelection} onChange={(event) => setClientSelection(event.target.value)} required>
+              <option value="">Select client</option>
+              <option value="__new__">+ Create new client</option>
+              {clientsQuery.data?.data.map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}
+            </select></label>
+            {creatingNewClient ? (
+              <div className="ui-form-row">
+                <label className="field"><span>Client name</span><input value={newClientName} onChange={(event) => setNewClientName(event.target.value)} required /></label>
+                <label className="field"><span>Company</span><input value={newClientCompany} onChange={(event) => setNewClientCompany(event.target.value)} /></label>
+              </div>
+            ) : null}
+          </section>
+        ) : null}
+        {createStep === 1 ? (
+          <section className="project-create-step" aria-labelledby="project-details-step">
+            <div className="wizard-step-heading"><h3 id="project-details-step">Project details</h3><p>Give the team a clear name and enough context to understand the work.</p></div>
+            <label className="field"><span>Project name</span><input value={name} onChange={(event) => setName(event.target.value)} required placeholder="e.g. Summer campaign launch" /></label>
+            <label className="field"><span>Description</span><textarea rows={5} value={description} onChange={(event) => setDescription(event.target.value)} placeholder="What should the team deliver?" /></label>
+          </section>
+        ) : null}
+        {createStep === 2 ? (
+          <section className="project-create-step" aria-labelledby="project-schedule-step">
+            <div className="wizard-step-heading"><h3 id="project-schedule-step">Schedule and priority</h3><p>Set the working window and how urgently this project should be handled.</p></div>
+            <div className="ui-form-row ui-form-row-three">
+              <label className="field"><span>Priority</span><select value={priority} onChange={(event) => setPriority(event.target.value)}><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="urgent">Urgent</option></select></label>
+              <label className="field"><span>Start date</span><input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} required /></label>
+              <label className="field"><span>Deadline</span><input type="date" value={deadline} onChange={(event) => setDeadline(event.target.value)} required /></label>
+            </div>
+            {!deadlineIsValid ? <p className="error-text">Deadline must be on or after the start date.</p> : null}
+          </section>
+        ) : null}
+        {createStep === 3 ? (
+          <section className="project-create-step" aria-labelledby="project-team-step">
+            <div className="wizard-step-heading"><h3 id="project-team-step">Team and review</h3><p>Assign teammates now, or create the project and add them later.</p></div>
+            {usersQuery.isError ? <p className="error-text">Could not load users for team assignment.</p> : null}
+            <div className="project-team-builder">
+              <p className="field-label">Initial team <span>Optional</span></p>
+              <div className="team-assignment-row">
+                <select aria-label="Team member" value={teamUserId} onChange={(event) => setTeamUserId(event.target.value)}>
+                  <option value="">Choose a team member</option>
+                  {usersQuery.data?.data.map((user) => <option key={user.id} value={user.id}>{user.name} ({user.email})</option>)}
+                </select>
+                <select aria-label="Project role" value={teamRole} onChange={(event) => setTeamRole(event.target.value as "manager" | "member" | "viewer")}>
+                  <option value="manager">Manager</option><option value="member">Member</option><option value="viewer">Viewer</option>
+                </select>
+                <Button size="sm" onClick={addTeamAssignment} disabled={!teamUserId}>Add</Button>
+              </div>
+              {teamAssignments.length > 0 ? (
+                <div className="assignment-list">
+                  {teamAssignments.map((assignment) => {
+                    const user = usersQuery.data?.data.find((item) => item.id === assignment.userId);
+                    return <div key={assignment.userId} className="assignment-item"><p>{user?.name ?? assignment.userId} <span>{assignment.role}</span></p><Button variant="ghost" size="sm" onClick={() => setTeamAssignments((previous) => previous.filter((item) => item.userId !== assignment.userId))}>Remove</Button></div>;
+                  })}
+                </div>
+              ) : <p className="wizard-empty-note">No teammates assigned yet.</p>}
+            </div>
+            <div className="project-create-review" aria-label="Project summary">
+              <div><span>Client</span><strong>{selectedClientName}</strong></div>
+              <div><span>Project</span><strong>{name}</strong></div>
+              <div><span>Timeline</span><strong>{startDate} → {deadline}</strong></div>
+              <div><span>Priority</span><strong className={`badge badge-priority badge-priority-${priority}`}>{priority}</strong></div>
+            </div>
+          </section>
+        ) : null}
+        {formError ? <p className="error-text" role="alert">{formError}</p> : null}
       </form>
-      <div className="card tasks-toolbar">
-        <select value={listClientId} onChange={(event) => setListParam("clientId", event.target.value)}>
+      </Dialog>
+
+      <div className="list-toolbar project-filters">
+        <select aria-label="Filter by client" value={listClientId} onChange={(event) => setListParam("clientId", event.target.value)}>
           <option value="">All clients</option>
           {clientsQuery.data?.data.map((client) => (
             <option key={client.id} value={client.id}>
@@ -360,85 +416,45 @@ export function ProjectsPage() {
             </option>
           ))}
         </select>
-        <select value={listPhase} onChange={(event) => setListParam("phase", event.target.value)}>
-          <option value="">All phases</option>
-          <option value="client_acquisition">client_acquisition</option>
-          <option value="strategy_planning">strategy_planning</option>
-          <option value="production">production</option>
-          <option value="post_production">post_production</option>
-          <option value="delivery">delivery</option>
+        <select aria-label="Filter by project stage" value={listPhase} onChange={(event) => setListParam("phase", event.target.value)}>
+          <option value="">All project stages</option>
+          <option value="client_acquisition">Acquisition</option><option value="strategy_planning">Strategy</option><option value="production">Production</option><option value="post_production">Post-production</option><option value="delivery">Delivery</option>
         </select>
-        <select value={listPriority} onChange={(event) => setListParam("priority", event.target.value)}>
+        <select aria-label="Filter by priority" value={listPriority} onChange={(event) => setListParam("priority", event.target.value)}>
           <option value="">All priorities</option>
-          <option value="low">low</option>
-          <option value="medium">medium</option>
-          <option value="high">high</option>
-          <option value="urgent">urgent</option>
+          <option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="urgent">Urgent</option>
         </select>
-        <select value={listSortBy} onChange={(event) => setListParam("sortBy", event.target.value)}>
-          <option value="updatedAt">Sort: updatedAt</option>
-          <option value="createdAt">Sort: createdAt</option>
-          <option value="deadline">Sort: deadline</option>
-          <option value="name">Sort: name</option>
-          <option value="priority">Sort: priority</option>
+        <span className="toolbar-spacer" />
+        {(listClientId || listPhase || listPriority) ? <Button variant="ghost" size="sm" onClick={clearListFilters}>Clear</Button> : null}
+        <select aria-label="Sort projects" value={`${listSortBy}:${listSortOrder}`} onChange={(event) => setListSort(event.target.value)}>
+          <option value="updatedAt:desc">Recently updated</option><option value="deadline:asc">Deadline</option><option value="name:asc">Name A–Z</option><option value="priority:desc">Priority</option>
         </select>
-        <select value={listSortOrder} onChange={(event) => setListParam("sortOrder", event.target.value)}>
-          <option value="desc">desc</option>
-          <option value="asc">asc</option>
-        </select>
-        <button type="button" className="ghost-button" onClick={clearListFilters}>
-          Clear filters
-        </button>
       </div>
-      <div className="card table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Client</th>
-              <th>Phase</th>
-              <th>Priority</th>
-              <th>Deadline</th>
-              <th>Role</th>
-            </tr>
-          </thead>
-          <tbody>
-            {projectsQuery.data?.data.map((project) => (
-              <tr key={project.id}>
-                <td>
-                  <Link to={`/projects/${project.id}`} className="inline-link">
-                    {project.name}
-                  </Link>
-                </td>
-                <td>{project.client_name}</td>
-                <td>{project.current_phase}</td>
-                <td>{project.priority}</td>
-                <td>{project.deadline}</td>
-                <td>{project.current_user_role ?? "-"}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <div className="inline-actions" style={{ marginTop: "10px" }}>
-          <button
-            type="button"
-            className="ghost-button"
-            disabled={listPage <= 1}
-            onClick={() => setListParam("page", String(Math.max(1, listPage - 1)))}
-          >
-            Previous
-          </button>
-          <p className="muted">Page {listPage}</p>
-          <button
-            type="button"
-            className="ghost-button"
-            disabled={(projectsQuery.data?.data.length ?? 0) < 25}
-            onClick={() => setListParam("page", String(listPage + 1))}
-          >
-            Next
-          </button>
+      {formError && !showCreate ? <p className="board-error" role="alert">{formError}</p> : null}
+      {(projectsQuery.data?.data.length ?? 0) === 0 ? (
+        <div className="state-card card"><p>No projects match these filters.</p><Button variant="primary" onClick={openCreateProject}>Create a project</Button></div>
+      ) : (
+        <div className="project-directory" aria-label="Projects">
+          {projectsQuery.data?.data.map((project) => {
+            const deadline = new Date(project.deadline);
+            const overdue = deadline.getTime() < Date.now() && project.current_phase !== "delivery";
+            return (
+              <Link key={project.id} to={`/projects/${project.id}`} className="project-directory-card">
+                <div className="project-directory-card-topline">
+                  <span className={`phase-pill phase-pill-${project.current_phase}`}>{project.current_phase.replaceAll("_", " ")}</span>
+                  <span className={`badge badge-priority badge-priority-${project.priority}`}>{project.priority}</span>
+                </div>
+                <div><h3>{project.name}</h3><p>{project.client_name}</p></div>
+                <div className="project-directory-meta">
+                  <span className={overdue ? "deadline-overdue" : ""}><CalendarDays size={14} /> {deadline.toLocaleDateString()}</span>
+                  <span><Users size={14} /> {project.current_user_role ?? "viewer"}</span>
+                </div>
+                <div className="project-directory-open"><span>Open task board</span><span aria-hidden="true">→</span></div>
+              </Link>
+            );
+          })}
         </div>
-      </div>
+      )}
     </section>
   );
 }
