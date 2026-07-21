@@ -54,6 +54,7 @@ export function TeamPage() {
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [createdInviteUrl, setCreatedInviteUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [membershipToRevoke, setMembershipToRevoke] = useState<ClientAccessRecord | null>(null);
   const [processingUserUpdate, setProcessingUserUpdate] = useState<{ userId: string; nextIsActive: boolean } | null>(null);
 
   const usersQuery = useQuery({
@@ -112,6 +113,46 @@ export function TeamPage() {
       ui.success("Invitation revoked.");
     },
     onError: () => ui.error("Could not revoke invitation.")
+  });
+
+  const updateClientRoleMutation = useMutation({
+    onMutate: async (input: { record: ClientAccessRecord; role: "reviewer" | "viewer" }) => {
+      await queryClient.cancelQueries({ queryKey: ["team-client-access"] });
+      const previous = queryClient.getQueryData<{ data: ClientAccessRecord[] }>(["team-client-access"]);
+      if (previous) {
+        queryClient.setQueryData<{ data: ClientAccessRecord[] }>(["team-client-access"], {
+          data: previous.data.map((record) =>
+            record.kind === "membership" && record.id === input.record.id && record.client_id === input.record.client_id
+              ? { ...record, role: input.role }
+              : record
+          )
+        });
+      }
+      return { previous };
+    },
+    mutationFn: (input: { record: ClientAccessRecord; role: "reviewer" | "viewer" }) => apiRequest(
+      `/client-invitations/memberships/${input.record.client_id}/${input.record.id}`,
+      { method: "PATCH", accessToken: accessToken ?? undefined, body: { role: input.role } }
+    ),
+    onSuccess: () => ui.success("Client portal role updated."),
+    onError: (_error, _input, context) => {
+      if (context?.previous) queryClient.setQueryData(["team-client-access"], context.previous);
+      ui.error("Could not update client portal role.");
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ["team-client-access"] })
+  });
+
+  const revokeMembershipMutation = useMutation({
+    mutationFn: (record: ClientAccessRecord) => apiRequest(
+      `/client-invitations/memberships/${record.client_id}/${record.id}`,
+      { method: "DELETE", accessToken: accessToken ?? undefined }
+    ),
+    onSuccess: async () => {
+      setMembershipToRevoke(null);
+      await queryClient.invalidateQueries({ queryKey: ["team-client-access"] });
+      ui.success("Client portal access removed.");
+    },
+    onError: () => ui.error("Could not remove client portal access.")
   });
 
   const toggleUserStatusMutation = useMutation({
@@ -187,7 +228,7 @@ export function TeamPage() {
           <div className="data-view mobile-card-table client-access-data-view">
             {clientAccessQuery.isLoading ? <LoadingState message="Loading client access..." /> : clientAccessQuery.isError ? <ErrorState message="Could not load client access." onRetry={() => void clientAccessQuery.refetch()} /> : !clientAccessQuery.data?.data.length ? <EmptyState message="Invite a client to the review portal." /> : (
               <table><thead><tr><th>Client user</th><th>Organization</th><th>Portal role</th><th>Status</th><th><span className="sr-only">Actions</span></th></tr></thead><tbody>
-                {clientAccessQuery.data.data.map((record) => <tr key={`${record.kind}-${record.id}`}><td><span className="row-title">{record.user_name ?? record.email}</span>{record.user_name ? <span className="row-subtitle">{record.email}</span> : null}</td><td>{record.client_name}</td><td>{record.role === "reviewer" ? "Reviewer" : "Viewer · read only"}</td><td><span className={`status-chip status-${record.status}`}>{record.status}</span></td><td className="row-action">{record.kind === "invitation" && record.status === "pending" && isAdmin ? <Button size="sm" variant="ghost" disabled={revokeInvitationMutation.isPending} onClick={() => revokeInvitationMutation.mutate(record.id)}>Revoke</Button> : null}</td></tr>)}
+                {clientAccessQuery.data.data.map((record) => <tr key={`${record.kind}-${record.client_id}-${record.id}`}><td><span className="row-title">{record.user_name ?? record.email}</span>{record.user_name ? <span className="row-subtitle">{record.email}</span> : null}</td><td>{record.client_name}</td><td>{record.kind === "membership" && isAdmin ? <select aria-label={`Portal role for ${record.user_name ?? record.email}`} value={record.role} disabled={updateClientRoleMutation.isPending || revokeMembershipMutation.isPending} onChange={(event) => updateClientRoleMutation.mutate({ record, role: event.target.value as "reviewer" | "viewer" })}><option value="reviewer">Reviewer</option><option value="viewer">Viewer · read only</option></select> : record.role === "reviewer" ? "Reviewer" : "Viewer · read only"}</td><td><span className={`status-chip status-${record.status}`}>{record.status}</span></td><td className="row-action">{record.kind === "invitation" && record.status === "pending" && isAdmin ? <Button size="sm" variant="ghost" disabled={revokeInvitationMutation.isPending} onClick={() => revokeInvitationMutation.mutate(record.id)}>Revoke invitation</Button> : record.kind === "membership" && isAdmin ? <Button size="sm" variant="ghost" disabled={updateClientRoleMutation.isPending || revokeMembershipMutation.isPending} onClick={() => setMembershipToRevoke(record)}>Remove access</Button> : null}</td></tr>)}
               </tbody></table>
             )}
           </div>
@@ -214,6 +255,16 @@ export function TeamPage() {
             {inviteError ? <p className="error-text">{inviteError}</p> : null}
           </form>
         )}
+      </Dialog>
+
+      <Dialog
+        open={Boolean(membershipToRevoke)}
+        onOpenChange={(open) => { if (!open && !revokeMembershipMutation.isPending) setMembershipToRevoke(null); }}
+        title="Remove client access?"
+        description="This person will immediately lose access to this client organization and its project reviews."
+        footer={<div className="inline-actions"><Button variant="ghost" disabled={revokeMembershipMutation.isPending} onClick={() => setMembershipToRevoke(null)}>Cancel</Button><Button variant="danger" disabled={!membershipToRevoke || revokeMembershipMutation.isPending} onClick={() => membershipToRevoke && revokeMembershipMutation.mutate(membershipToRevoke)}>{revokeMembershipMutation.isPending ? "Removing..." : "Remove access"}</Button></div>}
+      >
+        {membershipToRevoke ? <p><strong>{membershipToRevoke.user_name ?? membershipToRevoke.email}</strong> will no longer see work for <strong>{membershipToRevoke.client_name}</strong>.</p> : null}
       </Dialog>
     </section>
   );

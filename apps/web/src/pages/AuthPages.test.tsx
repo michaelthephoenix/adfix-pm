@@ -2,36 +2,34 @@ import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 import { LoginPage } from "./LoginPage";
-import { SignupPage } from "./SignupPage";
 
 vi.mock("../state/auth", () => ({
   useAuth: vi.fn(() => ({
     isAuthenticated: false,
-    login: vi.fn(),
-    signup: vi.fn()
+    login: vi.fn()
   }))
 }));
 
 describe("auth pages", () => {
-  it("login page links to signup", () => {
+  it("explains that client access is invitation-only", () => {
     render(
       <MemoryRouter>
         <LoginPage />
       </MemoryRouter>
     );
 
-    const link = screen.getByRole("link", { name: /sign up/i });
-    expect(link).toHaveAttribute("href", "/signup");
+    expect(screen.getByText(/secure invitation/i)).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /sign up/i })).not.toBeInTheDocument();
   });
 
-  it("signup page links to login", () => {
+  it("prefills an invited email without exposing demo credentials", () => {
     render(
-      <MemoryRouter>
-        <SignupPage />
+      <MemoryRouter initialEntries={["/login?email=client%40example.com&returnTo=%2Finvite%2Fsecure-token"]}>
+        <LoginPage />
       </MemoryRouter>
     );
 
-    const link = screen.getByRole("link", { name: /sign in/i });
-    expect(link).toHaveAttribute("href", "/login");
+    expect(screen.getByLabelText("Email")).toHaveValue("client@example.com");
+    expect(screen.getByLabelText("Password")).toHaveValue("");
   });
 });

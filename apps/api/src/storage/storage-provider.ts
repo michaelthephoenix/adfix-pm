@@ -1,4 +1,4 @@
-export type StoredObject = {
+type StoredObject = {
   objectKey: string;
   checksumSha256: string;
   size: number;
@@ -6,6 +6,7 @@ export type StoredObject = {
 
 export interface StorageProvider {
   save(input: { buffer: Buffer; fileName: string }): Promise<StoredObject>;
+  saveFromPath(input: { sourcePath: string; fileName: string }): Promise<StoredObject>;
   resolve(objectKey: string): Promise<string>;
   delete(objectKey: string): Promise<void>;
 }

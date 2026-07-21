@@ -2,6 +2,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildOpenApiSpec } from "../src/openapi/spec.js";
+import { validateOpenApiContract } from "./validate-openapi.js";
 
 function assertSpecShape(spec: ReturnType<typeof buildOpenApiSpec>) {
   if (spec.openapi !== "3.0.3") {
@@ -19,6 +20,7 @@ function assertSpecShape(spec: ReturnType<typeof buildOpenApiSpec>) {
     ,"/deliverables"
     ,"/client-portal/projects"
     ,"/files/upload-binary"
+    ,"/projects/setup"
   ];
   const paths = spec.paths as Record<string, unknown>;
   for (const requiredPath of requiredPaths) {
@@ -40,11 +42,12 @@ async function run() {
 
   const spec = buildOpenApiSpec("http://localhost:4000/api/v1");
   assertSpecShape(spec);
+  const validation = await validateOpenApiContract(spec);
 
   await mkdir(outputDir, { recursive: true });
   await writeFile(outputPath, `${JSON.stringify(spec, null, 2)}\n`, "utf-8");
 
-  console.log(`Exported OpenAPI spec: ${outputPath}`);
+  console.log(`Exported OpenAPI spec: ${outputPath} (${validation.documentedOperationCount} operations)`);
 }
 
 run().catch((error) => {

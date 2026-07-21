@@ -9,7 +9,7 @@ type DialogProps = {
   description?: string;
   children: ReactNode;
   footer?: ReactNode;
-  size?: "md" | "lg";
+  size?: "md" | "lg" | "xl";
 };
 
 export function Dialog({ open, onOpenChange, title, description, children, footer, size = "md" }: DialogProps) {

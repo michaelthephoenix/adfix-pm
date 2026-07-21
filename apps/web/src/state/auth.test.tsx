@@ -1,12 +1,23 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { ApiError } from "../lib/api";
 import { AuthProvider, useAuth } from "./auth";
 
 const apiRequestMock = vi.fn();
 const setRefreshHandlerMock = vi.fn();
 
 vi.mock("../lib/api", () => ({
+  ApiError: class ApiError extends Error {
+    status: number;
+    code: string | null;
+
+    constructor(message: string, status: number, code: string | null = null) {
+      super(message);
+      this.status = status;
+      this.code = code;
+    }
+  },
   apiRequest: (...args: unknown[]) => apiRequestMock(...args),
   setRefreshHandler: (...args: unknown[]) => setRefreshHandlerMock(...args),
   setUnauthorizedHandler: vi.fn()
@@ -24,7 +35,14 @@ function TestHarness() {
 
 const loginSession = {
   accessToken: "access-login",
-  user: { id: "u1", email: "admin@adfix.local", name: "Adfix Admin", isAdmin: true, accountType: "staff" }
+  user: {
+    id: "u1",
+    email: "admin@adfix.local",
+    name: "Adfix Admin",
+    isAdmin: true,
+    accountType: "staff",
+    mustChangePassword: false
+  }
 };
 
 describe("AuthProvider", () => {
@@ -52,5 +70,17 @@ describe("AuthProvider", () => {
     expect(screen.getByTestId("is-authenticated")).toHaveTextContent("true");
     expect(apiRequestMock).toHaveBeenCalledWith("/auth/refresh", expect.objectContaining({ skipAuthRetry: true }));
     expect(setRefreshHandlerMock).toHaveBeenCalled();
+  });
+
+  it("retries session restoration once after another tab rotates the cookie", async () => {
+    apiRequestMock
+      .mockRejectedValueOnce(new ApiError("Already rotated", 409, "REFRESH_ALREADY_ROTATED"))
+      .mockResolvedValueOnce(loginSession);
+
+    render(<AuthProvider><TestHarness /></AuthProvider>);
+
+    await waitFor(() => expect(screen.getByTestId("initializing")).toHaveTextContent("false"));
+    expect(screen.getByTestId("is-authenticated")).toHaveTextContent("true");
+    expect(apiRequestMock).toHaveBeenCalledTimes(2);
   });
 });

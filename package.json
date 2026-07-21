@@ -22,18 +22,28 @@
     "db:seed": "npm --workspace @adfix/api run db:seed",
     "db:seed:demo": "npm --workspace @adfix/api run db:seed:demo",
     "db:reset:demo": "npm --workspace @adfix/api run db:reset:demo",
+    "account:recover-admin": "npm --workspace @adfix/api run account:recover-admin",
+    "maintenance:cleanup": "npm --workspace @adfix/api run maintenance:cleanup",
     "openapi:export": "npm --workspace @adfix/api run openapi:export",
     "openapi:types": "openapi-typescript apps/api/openapi/openapi.v1.json -o apps/web/src/generated/api-schema.ts",
     "openapi:sync": "npm run openapi:export && npm run openapi:types",
     "test:api": "npm --workspace @adfix/api run test",
     "test:api:coverage": "npm --workspace @adfix/api run test:coverage",
     "test:web": "npm --workspace @adfix/web run test",
+    "test:web:coverage": "npm --workspace @adfix/web run test:coverage",
+    "test:e2e": "playwright test",
+    "test:e2e:update": "playwright test --update-snapshots",
+    "test:container": "node scripts/smoke-container.mjs",
     "test": "npm run test:api && npm run test:web",
-    "check": "npm run typecheck && npm run typecheck:web && npm run test && npm run build"
+    "lint:dead-code": "knip",
+    "check": "npm run lint:dead-code && npm run typecheck && npm run typecheck:web && npm run test && npm run build && npm run openapi:sync"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.12.1",
+    "@playwright/test": "^1.61.1",
     "@vitest/coverage-v8": "^4.1.10",
     "concurrently": "^10.0.3",
+    "knip": "^6.27.0",
     "openapi-typescript": "^7.13.0",
     "vitest": "^4.1.10"
   }

@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { ArrowRight, CalendarDays, Clock3, FileCheck2 } from "lucide-react";
 import { PageHeader } from "../components/ui/PageHeader";
+import { Badge } from "../components/ui/Badge";
 import { apiRequest } from "../lib/api";
 import { useAuth } from "../state/auth";
 import { EmptyState, ErrorState, LoadingState } from "../components/States";
@@ -24,7 +25,7 @@ export function ClientProjectsPage() {
   const pendingReviews = projects.reduce((total, project) => total + (project.client_role === "reviewer" ? project.pending_review_count : 0), 0);
   return (
     <section>
-      <PageHeader title="Projects" description="Shared work, deliverables, and review requests." meta={pendingReviews > 0 ? <span className="ui-badge ui-badge-warning">{pendingReviews} to review</span> : <span>{projects.length}</span>} />
+      <PageHeader title="Projects" description="Shared work, deliverables, and review requests." meta={pendingReviews > 0 ? <Badge tone="warning">{pendingReviews} to review</Badge> : <span>{projects.length}</span>} />
       {projects.length === 0 ? <EmptyState message="No projects have been shared with you yet." /> : (
         <div className="portal-project-grid">
           {projects.map((project) => (

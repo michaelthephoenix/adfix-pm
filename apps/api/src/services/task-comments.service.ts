@@ -72,16 +72,38 @@ export async function createTaskComment(input: {
 export async function deleteTaskComment(input: {
   taskId: string;
   commentId: string;
+  deletedBy: string;
+  canSupervise: boolean;
 }) {
-  const result = await pool.query<{ id: string }>(
-    `UPDATE task_comments
-     SET deleted_at = NOW(), updated_at = NOW()
-     WHERE id = $1
-       AND task_id = $2
-       AND deleted_at IS NULL
-     RETURNING id`,
-    [input.commentId, input.taskId]
-  );
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const existing = await client.query<{ user_id: string }>(
+      `SELECT user_id FROM task_comments
+       WHERE id = $1 AND task_id = $2 AND deleted_at IS NULL
+       FOR UPDATE`,
+      [input.commentId, input.taskId]
+    );
+    const comment = existing.rows[0];
+    if (!comment) {
+      await client.query("ROLLBACK");
+      return { ok: false as const, reason: "not_found" as const };
+    }
+    if (!input.canSupervise && comment.user_id !== input.deletedBy) {
+      await client.query("ROLLBACK");
+      return { ok: false as const, reason: "forbidden" as const };
+    }
 
-  return result.rowCount === 1;
+    await client.query(
+      `UPDATE task_comments SET deleted_at = NOW(), updated_at = NOW() WHERE id = $1`,
+      [input.commentId]
+    );
+    await client.query("COMMIT");
+    return { ok: true as const };
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
 }

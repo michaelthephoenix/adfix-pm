@@ -18,7 +18,7 @@ import { notificationsRouter } from "./routes/notifications.js";
 import { clientInvitationsRouter } from "./routes/client-invitations.js";
 import { clientPortalRouter } from "./routes/client-portal.js";
 import { deliverablesRouter } from "./routes/deliverables.js";
-import { apiRateLimiter, authRateLimiter } from "./middleware/rate-limit.js";
+import { apiRateLimiter } from "./middleware/rate-limit.js";
 import { errorHandler, notFoundHandler } from "./middleware/errors.js";
 import { requestIdMiddleware } from "./middleware/request-id.js";
 import { corsMiddleware } from "./middleware/cors.js";
@@ -47,7 +47,7 @@ export function createApp() {
   function mountApi(basePath: "/api" | "/api/v1") {
     app.use(basePath, healthRouter);
     app.use(basePath, docsRouter);
-    app.use(`${basePath}/auth`, authRateLimiter, authRouter);
+    app.use(`${basePath}/auth`, apiRateLimiter, authRouter);
     app.use(`${basePath}/clients`, apiRateLimiter, requireAuth, requireStaff, clientsRouter);
     app.use(`${basePath}/projects`, apiRateLimiter, requireAuth, requireStaff, projectsRouter);
     app.use(`${basePath}/tasks`, apiRateLimiter, requireAuth, requireStaff, tasksRouter);
@@ -66,7 +66,7 @@ export function createApp() {
 
   if (existsSync(env.WEB_DIST_DIR)) {
     app.use(express.static(env.WEB_DIST_DIR, { index: false }));
-    app.get("*", (req, res, next) => {
+    app.get(/.*/, (req, res, next) => {
       if (req.path.startsWith("/api")) return next();
       return res.sendFile(path.join(env.WEB_DIST_DIR, "index.html"));
     });

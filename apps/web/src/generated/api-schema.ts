@@ -26,7 +26,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["HealthResponse"];
+                    };
                 };
             };
         };
@@ -60,7 +62,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["ReadinessResponse"];
+                    };
                 };
                 /** @description Not ready (database unavailable) */
                 503: {
@@ -101,7 +105,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "text/html": string;
+                    };
                 };
             };
         };
@@ -135,7 +141,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["OpenApiDocument"];
+                    };
                 };
             };
         };
@@ -156,7 +164,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Authenticate with email/password */
+        /** Authenticate and set a secure refresh cookie */
         post: {
             parameters: {
                 query?: never;
@@ -171,7 +179,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["AuthResponse"];
+                    };
                 };
                 /** @description Invalid payload */
                 400: {
@@ -208,7 +218,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Rotate refresh token and issue new auth tokens */
+        /** Rotate the refresh cookie and issue an access token */
         post: {
             parameters: {
                 query?: never;
@@ -223,7 +233,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["AuthResponse"];
+                    };
                 };
                 /** @description Invalid payload */
                 400: {
@@ -242,6 +254,13 @@ export interface paths {
                     content: {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
+                };
+                /** @description A concurrent request already rotated this cookie; retry once */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
                 };
             };
         };
@@ -431,7 +450,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["CurrentUserResponse"];
+                    };
                 };
                 /** @description Validation error */
                 400: {
@@ -510,7 +531,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["GetClients200Response"];
+                    };
                 };
                 /** @description Validation error */
                 400: {
@@ -575,7 +598,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["PostClients201Response"];
+                    };
                 };
                 /** @description Validation error */
                 400: {
@@ -652,7 +677,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["GetClientsId200Response"];
+                    };
                 };
                 /** @description Validation error */
                 400: {
@@ -716,7 +743,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["PutClientsId200Response"];
+                    };
                 };
                 /** @description Validation error */
                 400: {
@@ -857,7 +886,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["GetProjects200Response"];
+                    };
                 };
                 /** @description Validation error */
                 400: {
@@ -922,7 +953,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["PostProjects201Response"];
+                    };
                 };
                 /** @description Validation error */
                 400: {
@@ -977,6 +1010,181 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/clients/{id}/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List client-related project activity */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Client activity feed */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["GetClientsIdActivity200Response"];
+                    };
+                };
+                /** @description Validation error */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Forbidden */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Conflict */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/setup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create a client, project, and initial team atomically */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ProjectSetupRequest"];
+                };
+            };
+            responses: {
+                /** @description Project setup committed */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PostProjectsSetup201Response"];
+                    };
+                };
+                /** @description Validation error */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Forbidden */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Conflict */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description One or more selected team members are invalid */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/projects/{id}": {
         parameters: {
             query?: never;
@@ -999,7 +1207,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["GetProjectsId200Response"];
+                    };
                 };
                 /** @description Validation error */
                 400: {
@@ -1063,7 +1273,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["PutProjectsId200Response"];
+                    };
                 };
                 /** @description Validation error */
                 400: {
@@ -1203,14 +1415,20 @@ export interface paths {
                 path?: never;
                 cookie?: never;
             };
-            requestBody?: never;
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ProjectPhaseTransitionRequest"];
+                };
+            };
             responses: {
                 /** @description Phase changed */
                 200: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["PatchProjectsIdPhase200Response"];
+                    };
                 };
                 /** @description Validation error */
                 400: {
@@ -1283,7 +1501,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["GetProjectsIdActivity200Response"];
+                    };
                 };
                 /** @description Validation error */
                 400: {
@@ -1362,7 +1582,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["GetProjectsIdTeam200Response"];
+                    };
                 };
                 /** @description Validation error */
                 400: {
@@ -1412,7 +1634,7 @@ export interface paths {
             };
         };
         put?: never;
-        /** Add or update project team member role */
+        /** Add a project team member */
         post: {
             parameters: {
                 query?: never;
@@ -1422,12 +1644,14 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description Project team member added/updated */
+                /** @description Project team member added */
                 201: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["PostProjectsIdTeam201Response"];
+                    };
                 };
                 /** @description Validation error */
                 400: {
@@ -1558,7 +1782,79 @@ export interface paths {
         };
         options?: never;
         head?: never;
-        patch?: never;
+        /** Change a project team member role */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        role: "manager" | "member" | "viewer";
+                    };
+                };
+            };
+            responses: {
+                /** @description Project team role updated */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PatchProjectsIdTeamUserId200Response"];
+                    };
+                };
+                /** @description Validation error */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Forbidden */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Conflict */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
         trace?: never;
     };
     "/tasks": {
@@ -1583,7 +1879,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["GetTasks200Response"];
+                    };
                 };
                 /** @description Validation error */
                 400: {
@@ -1648,7 +1946,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["PostTasks201Response"];
+                    };
                 };
                 /** @description Validation error */
                 400: {
@@ -1725,7 +2025,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["GetTasksId200Response"];
+                    };
                 };
                 /** @description Validation error */
                 400: {
@@ -1789,7 +2091,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["PutTasksId200Response"];
+                    };
                 };
                 /** @description Validation error */
                 400: {
@@ -1936,7 +2240,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["PatchTasksIdStatus200Response"];
+                    };
                 };
                 /** @description Validation error */
                 400: {
@@ -1987,6 +2293,87 @@ export interface paths {
         };
         trace?: never;
     };
+    "/tasks/{id}/deliverables": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Link an existing deliverable or create one for a task */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Deliverable linked to task */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PostTasksIdDeliverables201Response"];
+                    };
+                };
+                /** @description Validation error */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Forbidden */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Conflict */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/tasks/{id}/comments": {
         parameters: {
             query?: never;
@@ -2009,7 +2396,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["GetTasksIdComments200Response"];
+                    };
                 };
                 /** @description Validation error */
                 400: {
@@ -2074,7 +2463,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["PostTasksIdComments201Response"];
+                    };
                 };
                 /** @description Validation error */
                 400: {
@@ -2232,7 +2623,106 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["PostTasksBulkStatus200Response"];
+                    };
+                };
+                /** @description Validation error */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Forbidden */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Conflict */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tasks/bulk/update": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Bulk assign or classify tasks in one project */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        taskIds: string[];
+                        assigneeIds?: string[];
+                        /** @enum {string} */
+                        phase?: "client_acquisition" | "strategy_planning" | "production" | "post_production" | "delivery";
+                        /** @enum {string} */
+                        priority?: "low" | "medium" | "high" | "urgent";
+                        addLabels?: {
+                            name: string;
+                            /** @enum {string} */
+                            color: "violet" | "blue" | "green" | "amber" | "rose" | "slate";
+                        }[];
+                    };
+                };
+            };
+            responses: {
+                /** @description Bulk task update result */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PostTasksBulkUpdate200Response"];
+                    };
                 };
                 /** @description Validation error */
                 400: {
@@ -2311,7 +2801,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["PostTasksBulkDelete200Response"];
+                    };
                 };
                 /** @description Validation error */
                 400: {
@@ -2388,7 +2880,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["GetFilesProjectProjectId200Response"];
+                    };
                 };
                 /** @description Validation error */
                 400: {
@@ -2469,7 +2963,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["PostFilesLink201Response"];
+                    };
                 };
                 /** @description Validation error */
                 400: {
@@ -2548,7 +3044,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["PostFilesUpload201Response"];
+                    };
                 };
                 /** @description Validation error */
                 400: {
@@ -2627,7 +3125,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["PostFilesUploadBinary201Response"];
+                    };
                 };
                 /** @description Validation error */
                 400: {
@@ -2704,7 +3204,180 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "*/*": string;
+                    };
+                };
+                /** @description Validation error */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Forbidden */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Conflict */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/files/{id}/preview-session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create a five-minute, file-scoped in-app preview session */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Preview session created */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PostFilesIdPreviewSession200Response"];
+                    };
+                };
+                /** @description Validation error */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Forbidden */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Conflict */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/files/{id}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Stream inline preview content using the HTTP-only preview session */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Complete preview content */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "*/*": string;
+                    };
+                };
+                /** @description Partial preview content for media seeking */
+                206: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "*/*": string;
+                    };
                 };
                 /** @description Validation error */
                 400: {
@@ -2785,7 +3458,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["PostFilesUploadUrl200Response"];
+                    };
                 };
                 /** @description Validation error */
                 400: {
@@ -2864,7 +3539,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["PostFilesCompleteUpload201Response"];
+                    };
                 };
                 /** @description Validation error */
                 400: {
@@ -2941,7 +3618,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["GetFilesIdDownloadUrl200Response"];
+                    };
                 };
                 /** @description Validation error */
                 400: {
@@ -3084,7 +3763,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Dashboard analytics (RBAC scoped) */
+        /** Supervisor action dashboard (RBAC scoped) */
         get: {
             parameters: {
                 query?: never;
@@ -3094,12 +3773,14 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description Dashboard metrics */
+                /** @description Review queues, delivery risks, due work, and team workload */
                 200: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["DashboardResponse"];
+                    };
                 };
                 /** @description Validation error */
                 400: {
@@ -3178,7 +3859,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["GetAnalyticsProjects200Response"];
+                    };
                 };
                 /** @description Validation error */
                 400: {
@@ -3257,7 +3940,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["GetAnalyticsTeam200Response"];
+                    };
                 };
                 /** @description Validation error */
                 400: {
@@ -3336,7 +4021,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["GetAnalyticsTimeline200Response"];
+                    };
                 };
                 /** @description Validation error */
                 400: {
@@ -3415,7 +4102,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "text/csv": string;
+                    };
                 };
                 /** @description Validation error */
                 400: {
@@ -3494,7 +4183,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "text/csv": string;
+                    };
                 };
                 /** @description Validation error */
                 400: {
@@ -3573,7 +4264,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["GetSearch200Response"];
+                    };
                 };
                 /** @description Validation error */
                 400: {
@@ -3640,7 +4333,11 @@ export interface paths {
         /** List current user notifications */
         get: {
             parameters: {
-                query?: never;
+                query?: {
+                    view?: "all" | "unread" | "action_required" | "resolved" | "archived";
+                    page?: number;
+                    pageSize?: number;
+                };
                 header?: never;
                 path?: never;
                 cookie?: never;
@@ -3652,7 +4349,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["NotificationsResponse"];
+                    };
                 };
                 /** @description Validation error */
                 400: {
@@ -3733,7 +4432,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["UpdatedCountResponse"];
+                    };
                 };
                 /** @description Validation error */
                 400: {
@@ -3816,7 +4517,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["NotificationResponse"];
+                    };
                 };
                 /** @description Validation error */
                 400: {
@@ -3889,7 +4592,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["GetClientInvitations200Response"];
+                    };
                 };
                 /** @description Validation error */
                 400: {
@@ -3954,7 +4659,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["PostClientInvitations201Response"];
+                    };
                 };
                 /** @description Validation error */
                 400: {
@@ -4031,7 +4738,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["GetClientInvitationsClientClientId200Response"];
+                    };
                 };
                 /** @description Validation error */
                 400: {
@@ -4189,7 +4898,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["GetClientInvitationsTokenToken200Response"];
+                    };
                 };
                 /** @description Validation error */
                 400: {
@@ -4270,7 +4981,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["PostClientInvitationsTokenTokenAccept201Response"];
+                    };
                 };
                 /** @description Validation error */
                 400: {
@@ -4349,7 +5062,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["PostClientInvitationsTokenTokenAcceptExisting200Response"];
+                    };
                 };
                 /** @description Validation error */
                 400: {
@@ -4428,7 +5143,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["PostDeliverables201Response"];
+                    };
                 };
                 /** @description Validation error */
                 400: {
@@ -4505,7 +5222,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["GetDeliverablesProjectProjectId200Response"];
+                    };
                 };
                 /** @description Validation error */
                 400: {
@@ -4571,8 +5290,96 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Submit a numbered deliverable version for review */
+        /** Submit a numbered deliverable version for internal review */
         post: {
+            parameters: {
+                query?: never;
+                header?: {
+                    /** @description Stable key used to safely retry a workflow mutation without creating duplicate work. */
+                    "idempotency-key"?: components["parameters"]["idempotencyKeyHeader"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Version sent to project supervisors */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PostDeliverablesIdVersions201Response"];
+                    };
+                };
+                /** @description Validation error */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Forbidden */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Conflict */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/notifications/{id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Archive a non-actionable or resolved notification */
+        patch: {
             parameters: {
                 query?: never;
                 header?: never;
@@ -4581,12 +5388,655 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description Version submitted */
-                201: {
+                /** @description Notification archived */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["NullableNotificationResponse"];
+                    };
+                };
+                /** @description Validation error */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Forbidden */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Conflict */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        trace?: never;
+    };
+    "/notifications/{id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Restore an archived notification */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Notification restored */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["NotificationResponse"];
+                    };
+                };
+                /** @description Validation error */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Forbidden */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Conflict */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        trace?: never;
+    };
+    "/client-invitations/memberships/{clientId}/{userId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revoke accepted client portal access (administrator only) */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Client membership revoked */
+                204: {
                     headers: {
                         [name: string]: unknown;
                     };
                     content?: never;
+                };
+                /** @description Validation error */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Forbidden */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Conflict */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        /** Change an accepted client portal role (administrator only) */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Client membership role updated */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PatchClientInvitationsMembershipsClientIdUserId200Response"];
+                    };
+                };
+                /** @description Validation error */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Forbidden */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Conflict */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        trace?: never;
+    };
+    "/deliverables/versions/{versionId}/internal-review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve or request changes during internal review */
+        post: {
+            parameters: {
+                query?: never;
+                header?: {
+                    /** @description Stable key used to safely retry a workflow mutation without creating duplicate work. */
+                    "idempotency-key"?: components["parameters"]["idempotencyKeyHeader"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Internal review recorded */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PostDeliverablesVersionsVersionIdInternalReview201Response"];
+                    };
+                };
+                /** @description Validation error */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Forbidden */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Conflict */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/deliverables/versions/{versionId}/submit-client": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Submit an internally approved version to client reviewers */
+        post: {
+            parameters: {
+                query?: never;
+                header?: {
+                    /** @description Stable key used to safely retry a workflow mutation without creating duplicate work. */
+                    "idempotency-key"?: components["parameters"]["idempotencyKeyHeader"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Version submitted to the client */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PostDeliverablesVersionsVersionIdSubmitClient200Response"];
+                    };
+                };
+                /** @description Validation error */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Forbidden */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Conflict */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/deliverables/versions/{versionId}/withdraw-client": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Pull an active client review back to internal approval by its original submitter */
+        post: {
+            parameters: {
+                query?: never;
+                header?: {
+                    /** @description Stable key used to safely retry a workflow mutation without creating duplicate work. */
+                    "idempotency-key"?: components["parameters"]["idempotencyKeyHeader"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Version withdrawn from client review */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PostDeliverablesVersionsVersionIdWithdrawClient200Response"];
+                    };
+                };
+                /** @description Validation error */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Forbidden */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Conflict */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/deliverables/versions/{versionId}/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Send a supervisor reply to the client review thread */
+        post: {
+            parameters: {
+                query?: never;
+                header?: {
+                    /** @description Stable key used to safely retry a workflow mutation without creating duplicate work. */
+                    "idempotency-key"?: components["parameters"]["idempotencyKeyHeader"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Message sent */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PostDeliverablesVersionsVersionIdMessages201Response"];
+                    };
+                };
+                /** @description Validation error */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Forbidden */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Conflict */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/deliverables/versions/{versionId}/forward-feedback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Route edited client feedback to selected project tasks */
+        post: {
+            parameters: {
+                query?: never;
+                header?: {
+                    /** @description Stable key used to safely retry a workflow mutation without creating duplicate work. */
+                    "idempotency-key"?: components["parameters"]["idempotencyKeyHeader"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Feedback added to tasks and assignees notified */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PostDeliverablesVersionsVersionIdForwardFeedback201Response"];
+                    };
                 };
                 /** @description Validation error */
                 400: {
@@ -4663,7 +6113,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["GetClientPortalProjects200Response"];
+                    };
                 };
                 /** @description Validation error */
                 400: {
@@ -4742,7 +6194,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["GetClientPortalProjectsProjectId200Response"];
+                    };
                 };
                 /** @description Validation error */
                 400: {
@@ -4812,7 +6266,10 @@ export interface paths {
         post: {
             parameters: {
                 query?: never;
-                header?: never;
+                header?: {
+                    /** @description Stable key used to safely retry a workflow mutation without creating duplicate work. */
+                    "idempotency-key"?: components["parameters"]["idempotencyKeyHeader"];
+                };
                 path?: never;
                 cookie?: never;
             };
@@ -4823,7 +6280,177 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["PostClientPortalVersionsVersionIdReviews201Response"];
+                    };
+                };
+                /** @description Validation error */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Forbidden */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Conflict */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/client-portal/reviews": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the signed-in client's review-ready deliverables and history */
+        get: {
+            parameters: {
+                query?: {
+                    status?: "pending" | "reviewed" | "history";
+                    sort?: "oldest" | "newest" | "deadline";
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Sanitized client review inbox */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ClientReviewInboxResponse"];
+                    };
+                };
+                /** @description Validation error */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Forbidden */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Conflict */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/client-portal/versions/{versionId}/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Send a message to project supervisors in a deliverable thread */
+        post: {
+            parameters: {
+                query?: never;
+                header?: {
+                    /** @description Stable key used to safely retry a workflow mutation without creating duplicate work. */
+                    "idempotency-key"?: components["parameters"]["idempotencyKeyHeader"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Client message sent */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PostClientPortalVersionsVersionIdMessages201Response"];
+                    };
                 };
                 /** @description Validation error */
                 400: {
@@ -4900,7 +6527,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["GetUsers200Response"];
+                    };
                 };
                 /** @description Validation error */
                 400: {
@@ -4965,7 +6594,169 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
+                    content: {
+                        "application/json": components["schemas"]["PostUsers201Response"];
+                    };
+                };
+                /** @description Validation error */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Forbidden */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Conflict */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/users/me/change-password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Change the current user's password */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Password changed and other sessions revoked */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
                     content?: never;
+                };
+                /** @description Validation error */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Forbidden */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Conflict */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/users/admin/password-reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Administrator password reset for a user */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Password reset result */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PostUsersAdminPasswordReset200Response"];
+                    };
                 };
                 /** @description Validation error */
                 400: {
@@ -5042,7 +6833,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["GetUsersId200Response"];
+                    };
                 };
                 /** @description Validation error */
                 400: {
@@ -5106,7 +6899,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["PutUsersId200Response"];
+                    };
                 };
                 /** @description Validation error */
                 400: {
@@ -5184,7 +6979,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["GetUsersAuditLogs200Response"];
+                    };
                 };
                 /** @description Validation error */
                 400: {
@@ -5269,7 +7066,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["PatchUsersIdStatus200Response"];
+                    };
                 };
                 /** @description Validation error */
                 400: {
@@ -5344,7 +7143,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["PostUsersIdProjectRolesReset200Response"];
+                    };
                 };
                 /** @description Validation error */
                 400: {
@@ -5410,11 +7211,377 @@ export interface components {
             requestId: string | null;
             details?: unknown;
         };
+        /** @description Exactly one of clientId or newClient is required. All records are committed atomically. */
+        ProjectSetupRequest: {
+            /** Format: uuid */
+            clientId?: string;
+            newClient?: {
+                name: string;
+                company?: string | null;
+            };
+            name: string;
+            description?: string | null;
+            /** @enum {string} */
+            priority?: "low" | "medium" | "high" | "urgent";
+            budget?: string | null;
+            /** Format: date */
+            startDate: string;
+            /** Format: date */
+            deadline: string;
+            team: {
+                /** Format: uuid */
+                userId: string;
+                /** @enum {string} */
+                role: "manager" | "member" | "viewer";
+            }[];
+        };
+        ProjectPhaseTransitionRequest: {
+            /** @enum {string} */
+            phase: "client_acquisition" | "strategy_planning" | "production" | "post_production" | "delivery";
+            reason?: string | null;
+            clientUpdate?: string | null;
+            /** @default false */
+            confirmUnresolvedReviews: boolean;
+        };
+        JsonObject: {
+            [key: string]: unknown;
+        };
+        JsonObjectResponse: {
+            [key: string]: unknown;
+        };
+        User: {
+            /** Format: uuid */
+            id: string;
+            /** Format: email */
+            email: string;
+            name: string;
+            isAdmin: boolean;
+            /** @enum {string} */
+            accountType: "staff" | "client";
+            avatarUrl?: string | null;
+        };
+        AuthResponse: {
+            accessToken: string;
+            user: components["schemas"]["User"];
+        };
+        CurrentUserResponse: {
+            user: components["schemas"]["User"];
+        };
+        HealthResponse: {
+            /** @enum {string} */
+            status: "ok";
+            service: string;
+            /** Format: date-time */
+            timestamp: string;
+        };
+        ReadinessResponse: {
+            /** @enum {string} */
+            status: "ok" | "degraded";
+            service: string;
+            checks: {
+                /** @enum {string} */
+                database: "ok" | "error";
+                /** @enum {string} */
+                storage: "ok" | "error";
+            };
+            /** Format: date-time */
+            timestamp: string;
+        };
+        OpenApiDocument: {
+            [key: string]: unknown;
+        };
+        DashboardAssignee: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            avatarUrl: string | null;
+        };
+        DashboardTask: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            /** @enum {string} */
+            priority: "low" | "medium" | "high" | "urgent";
+            /** Format: date */
+            dueDate: string | null;
+            /** Format: uuid */
+            projectId: string;
+            projectName: string;
+            clientName: string;
+            assignees: components["schemas"]["DashboardAssignee"][];
+        };
+        DashboardInternalReview: {
+            /** Format: uuid */
+            versionId: string;
+            /** Format: uuid */
+            deliverableId: string;
+            deliverableTitle: string;
+            /** Format: uuid */
+            projectId: string;
+            projectName: string;
+            clientName: string;
+            versionNumber: number;
+            /** Format: date-time */
+            submittedAt: string;
+            submittedByName: string;
+        };
+        DashboardClientFeedback: {
+            /** Format: uuid */
+            notificationId: string;
+            type: string;
+            title: string;
+            message: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: uuid */
+            versionId: string;
+            /** Format: uuid */
+            deliverableId: string;
+            deliverableTitle: string;
+            /** Format: uuid */
+            projectId: string;
+            projectName: string;
+            clientName: string;
+        };
+        DashboardUnresolvedReview: {
+            /** Format: uuid */
+            versionId: string;
+            /** Format: uuid */
+            deliverableId: string;
+            deliverableTitle: string;
+            /** Format: uuid */
+            projectId: string;
+            projectName: string;
+            clientName: string;
+            versionNumber: number;
+            /** Format: date-time */
+            clientSubmittedAt: string;
+        };
+        DashboardWorkload: {
+            /** Format: uuid */
+            userId: string;
+            userName: string;
+            avatarUrl: string | null;
+            activeTasks: number;
+            dueToday: number;
+            overdueTasks: number;
+            blockedTasks: number;
+        };
+        DashboardResponse: {
+            data: {
+                projectsByPhase: {
+                    phase: string;
+                    count: number;
+                }[];
+                overdueTasksCount: number;
+                projectsCompletedThisMonth: number;
+                projectsCompletedThisQuarter: number;
+                attentionCounts: {
+                    internalReviews: number;
+                    clientFeedback: number;
+                    dueToday: number;
+                    blockedTasks: number;
+                    unresolvedClientReviews: number;
+                };
+                internalReviewsAwaitingDecision: components["schemas"]["DashboardInternalReview"][];
+                clientFeedbackAwaitingResponse: components["schemas"]["DashboardClientFeedback"][];
+                dueTodayAssignments: components["schemas"]["DashboardTask"][];
+                blockedTasks: components["schemas"]["DashboardTask"][];
+                unresolvedClientReviews: components["schemas"]["DashboardUnresolvedReview"][];
+                workload: components["schemas"]["DashboardWorkload"][];
+            };
+        };
+        NotificationRecord: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            user_id: string;
+            /** Format: uuid */
+            project_id: string | null;
+            /** Format: uuid */
+            task_id: string | null;
+            type: string;
+            title: string;
+            message: string;
+            metadata: {
+                [key: string]: unknown;
+            };
+            is_read: boolean;
+            /** Format: date-time */
+            read_at: string | null;
+            action_required: boolean;
+            /** @enum {string} */
+            action_status: "open" | "resolved" | "superseded";
+            /** Format: date-time */
+            resolved_at: string | null;
+            resolution_reason: string | null;
+            /** Format: date-time */
+            archived_at: string | null;
+            /** Format: date-time */
+            created_at: string;
+        };
+        Notification: components["schemas"]["NotificationRecord"] & {
+            target_available: boolean;
+        };
+        NotificationResponse: {
+            data: components["schemas"]["NotificationRecord"];
+        };
+        NullableNotificationResponse: {
+            data: components["schemas"]["NotificationRecord"] | null;
+        };
+        NotificationsResponse: {
+            data: components["schemas"]["Notification"][];
+            meta: {
+                page: number;
+                pageSize: number;
+                /** @enum {string} */
+                sortOrder: "asc" | "desc";
+                total: number;
+                unreadCount: number;
+                openActionCount: number;
+            };
+        };
+        UpdatedCountResponse: {
+            data: {
+                updatedCount: number;
+            };
+        };
+        ClientReviewDecision: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            decision: "approved" | "changes_requested";
+            comment: string | null;
+            /** Format: date-time */
+            reviewedAt: string;
+            reviewerName: string;
+        };
+        ClientReviewInboxItem: {
+            /** Format: uuid */
+            versionId: string;
+            /** Format: uuid */
+            deliverableId: string;
+            deliverableTitle: string;
+            deliverableDescription: string | null;
+            deliverableStatus: string;
+            versionNumber: number;
+            submissionNote: string | null;
+            /** Format: date-time */
+            clientSubmittedAt: string;
+            file: {
+                /** Format: uuid */
+                id: string;
+                name: string;
+                size: string;
+                mimeType: string;
+                /** @enum {string} */
+                storageType: "local" | "s3" | "google_drive" | "dropbox" | "onedrive" | "external";
+                externalUrl: string | null;
+            };
+            project: {
+                /** Format: uuid */
+                id: string;
+                name: string;
+                phase: string;
+                /** Format: date */
+                deadline: string;
+            };
+            client: {
+                /** Format: uuid */
+                id: string;
+                name: string;
+            };
+            /** @enum {string} */
+            clientRole: "reviewer" | "viewer";
+            review: components["schemas"]["ClientReviewDecision"] | null;
+            canReview: boolean;
+        };
+        ClientReviewInboxResponse: {
+            data: components["schemas"]["ClientReviewInboxItem"][];
+            meta: {
+                /** @enum {string} */
+                status: "pending" | "reviewed" | "history";
+                /** @enum {string} */
+                sort: "oldest" | "newest" | "deadline";
+                counts: {
+                    pending: number;
+                    reviewed: number;
+                    history: number;
+                };
+            };
+        };
+        GetClients200Response: components["schemas"]["JsonObjectResponse"];
+        PostClients201Response: components["schemas"]["JsonObjectResponse"];
+        GetClientsId200Response: components["schemas"]["JsonObjectResponse"];
+        PutClientsId200Response: components["schemas"]["JsonObjectResponse"];
+        GetProjects200Response: components["schemas"]["JsonObjectResponse"];
+        PostProjects201Response: components["schemas"]["JsonObjectResponse"];
+        GetClientsIdActivity200Response: components["schemas"]["JsonObjectResponse"];
+        PostProjectsSetup201Response: components["schemas"]["JsonObjectResponse"];
+        GetProjectsId200Response: components["schemas"]["JsonObjectResponse"];
+        PutProjectsId200Response: components["schemas"]["JsonObjectResponse"];
+        PatchProjectsIdPhase200Response: components["schemas"]["JsonObjectResponse"];
+        GetProjectsIdActivity200Response: components["schemas"]["JsonObjectResponse"];
+        GetProjectsIdTeam200Response: components["schemas"]["JsonObjectResponse"];
+        PostProjectsIdTeam201Response: components["schemas"]["JsonObjectResponse"];
+        PatchProjectsIdTeamUserId200Response: components["schemas"]["JsonObjectResponse"];
+        GetTasks200Response: components["schemas"]["JsonObjectResponse"];
+        PostTasks201Response: components["schemas"]["JsonObjectResponse"];
+        GetTasksId200Response: components["schemas"]["JsonObjectResponse"];
+        PutTasksId200Response: components["schemas"]["JsonObjectResponse"];
+        PatchTasksIdStatus200Response: components["schemas"]["JsonObjectResponse"];
+        PostTasksIdDeliverables201Response: components["schemas"]["JsonObjectResponse"];
+        GetTasksIdComments200Response: components["schemas"]["JsonObjectResponse"];
+        PostTasksIdComments201Response: components["schemas"]["JsonObjectResponse"];
+        PostTasksBulkStatus200Response: components["schemas"]["JsonObjectResponse"];
+        PostTasksBulkUpdate200Response: components["schemas"]["JsonObjectResponse"];
+        PostTasksBulkDelete200Response: components["schemas"]["JsonObjectResponse"];
+        GetFilesProjectProjectId200Response: components["schemas"]["JsonObjectResponse"];
+        PostFilesLink201Response: components["schemas"]["JsonObjectResponse"];
+        PostFilesUpload201Response: components["schemas"]["JsonObjectResponse"];
+        PostFilesUploadBinary201Response: components["schemas"]["JsonObjectResponse"];
+        PostFilesIdPreviewSession200Response: components["schemas"]["JsonObjectResponse"];
+        PostFilesUploadUrl200Response: components["schemas"]["JsonObjectResponse"];
+        PostFilesCompleteUpload201Response: components["schemas"]["JsonObjectResponse"];
+        GetFilesIdDownloadUrl200Response: components["schemas"]["JsonObjectResponse"];
+        GetAnalyticsProjects200Response: components["schemas"]["JsonObjectResponse"];
+        GetAnalyticsTeam200Response: components["schemas"]["JsonObjectResponse"];
+        GetAnalyticsTimeline200Response: components["schemas"]["JsonObjectResponse"];
+        GetSearch200Response: components["schemas"]["JsonObjectResponse"];
+        GetClientInvitations200Response: components["schemas"]["JsonObjectResponse"];
+        PostClientInvitations201Response: components["schemas"]["JsonObjectResponse"];
+        GetClientInvitationsClientClientId200Response: components["schemas"]["JsonObjectResponse"];
+        GetClientInvitationsTokenToken200Response: components["schemas"]["JsonObjectResponse"];
+        PostClientInvitationsTokenTokenAccept201Response: components["schemas"]["JsonObjectResponse"];
+        PostClientInvitationsTokenTokenAcceptExisting200Response: components["schemas"]["JsonObjectResponse"];
+        PostDeliverables201Response: components["schemas"]["JsonObjectResponse"];
+        GetDeliverablesProjectProjectId200Response: components["schemas"]["JsonObjectResponse"];
+        PostDeliverablesIdVersions201Response: components["schemas"]["JsonObjectResponse"];
+        PatchClientInvitationsMembershipsClientIdUserId200Response: components["schemas"]["JsonObjectResponse"];
+        PostDeliverablesVersionsVersionIdInternalReview201Response: components["schemas"]["JsonObjectResponse"];
+        PostDeliverablesVersionsVersionIdSubmitClient200Response: components["schemas"]["JsonObjectResponse"];
+        PostDeliverablesVersionsVersionIdWithdrawClient200Response: components["schemas"]["JsonObjectResponse"];
+        PostDeliverablesVersionsVersionIdMessages201Response: components["schemas"]["JsonObjectResponse"];
+        PostDeliverablesVersionsVersionIdForwardFeedback201Response: components["schemas"]["JsonObjectResponse"];
+        GetClientPortalProjects200Response: components["schemas"]["JsonObjectResponse"];
+        GetClientPortalProjectsProjectId200Response: components["schemas"]["JsonObjectResponse"];
+        PostClientPortalVersionsVersionIdReviews201Response: components["schemas"]["JsonObjectResponse"];
+        PostClientPortalVersionsVersionIdMessages201Response: components["schemas"]["JsonObjectResponse"];
+        GetUsers200Response: components["schemas"]["JsonObjectResponse"];
+        PostUsers201Response: components["schemas"]["JsonObjectResponse"];
+        PostUsersAdminPasswordReset200Response: components["schemas"]["JsonObjectResponse"];
+        GetUsersId200Response: components["schemas"]["JsonObjectResponse"];
+        PutUsersId200Response: components["schemas"]["JsonObjectResponse"];
+        GetUsersAuditLogs200Response: components["schemas"]["JsonObjectResponse"];
+        PatchUsersIdStatus200Response: components["schemas"]["JsonObjectResponse"];
+        PostUsersIdProjectRolesReset200Response: components["schemas"]["JsonObjectResponse"];
     };
     responses: never;
     parameters: {
         /** @description Optional request correlation ID. */
         requestIdHeader: string;
+        /** @description Stable key used to safely retry a workflow mutation without creating duplicate work. */
+        idempotencyKeyHeader: string;
     };
     requestBodies: never;
     headers: never;

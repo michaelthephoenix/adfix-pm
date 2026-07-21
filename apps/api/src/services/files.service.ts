@@ -10,7 +10,7 @@ export type FileType =
   | "deliverable"
   | "other";
 
-export type StorageType = "local" | "s3" | "google_drive" | "dropbox" | "onedrive";
+type StorageType = "local" | "s3" | "google_drive" | "dropbox" | "onedrive" | "external";
 
 type FileRow = {
   id: string;
@@ -117,7 +117,7 @@ export async function createLinkedFile(input: {
   projectId: string;
   fileName: string;
   fileType: FileType;
-  storageType: "google_drive" | "dropbox" | "onedrive";
+  storageType: "google_drive" | "dropbox" | "onedrive" | "external";
   externalUrl: string;
   mimeType: string;
   fileSize: number;
@@ -207,14 +207,41 @@ export async function createUploadedFile(input: {
 }
 
 export async function deleteFile(fileId: string) {
-  const result = await pool.query<{ id: string }>(
-    `UPDATE files
-     SET deleted_at = NOW()
-     WHERE id = $1
-       AND deleted_at IS NULL
-     RETURNING id`,
-    [fileId]
-  );
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const state = await client.query<{ id: string; current_phase: string; referenced: boolean }>(
+      `SELECT file.id, project.current_phase,
+         EXISTS (
+           SELECT 1 FROM deliverable_versions version WHERE version.file_id = file.id
+         ) AS referenced
+       FROM files file
+       INNER JOIN projects project ON project.id = file.project_id AND project.deleted_at IS NULL
+       WHERE file.id = $1 AND file.deleted_at IS NULL
+       FOR UPDATE OF file`,
+      [fileId]
+    );
+    const file = state.rows[0];
+    if (!file) {
+      await client.query("ROLLBACK");
+      return { ok: false as const, reason: "not_found" as const };
+    }
+    if (file.current_phase === "delivery") {
+      await client.query("ROLLBACK");
+      return { ok: false as const, reason: "delivery_locked" as const };
+    }
+    if (file.referenced) {
+      await client.query("ROLLBACK");
+      return { ok: false as const, reason: "deliverable_history" as const };
+    }
 
-  return result.rowCount === 1;
+    await client.query("UPDATE files SET deleted_at = NOW() WHERE id = $1", [fileId]);
+    await client.query("COMMIT");
+    return { ok: true as const };
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
 }

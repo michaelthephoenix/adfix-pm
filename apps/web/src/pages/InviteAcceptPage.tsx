@@ -8,13 +8,20 @@ import type { AuthTokens } from "../types";
 import { LoadingState } from "../components/States";
 
 type InvitationResponse = {
-  data: { clientName: string; email: string; role: string; expiresAt: string; isValid: boolean };
+  data: {
+    clientName: string;
+    email: string;
+    role: string;
+    expiresAt: string;
+    isValid: boolean;
+    accountExists: boolean;
+  };
 };
 
 export function InviteAcceptPage() {
   const { token = "" } = useParams();
   const navigate = useNavigate();
-  const { user, accessToken, adoptSession } = useAuth();
+  const { user, accessToken, adoptSession, logout } = useAuth();
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -29,6 +36,12 @@ export function InviteAcceptPage() {
   if (!token) return <Navigate to="/login" replace />;
   if (invitationQuery.isLoading) return <LoadingState message="Checking invitation..." />;
   const invitation = invitationQuery.data?.data;
+
+  const goToInvitedAccountLogin = async () => {
+    if (user) await logout();
+    const returnTo = `/invite/${token}`;
+    navigate(`/login?email=${encodeURIComponent(invitation?.email ?? "")}&returnTo=${encodeURIComponent(returnTo)}`);
+  };
 
   const accept = async (event: FormEvent) => {
     event.preventDefault();
@@ -60,6 +73,11 @@ export function InviteAcceptPage() {
     return <main className="invite-wrap"><section className="invite-card"><h1>Invitation unavailable</h1><p>This link is invalid or has expired. Ask your Adfix contact for a new invitation.</p></section></main>;
   }
 
+  const signedInWithInvitedClientAccount = Boolean(
+    user?.accountType === "client" && user.email.toLowerCase() === invitation.email.toLowerCase()
+  );
+  const signedInWithWrongAccount = Boolean(user && !signedInWithInvitedClientAccount);
+
   return (
     <main className="invite-wrap">
       <section className="invite-card">
@@ -71,9 +89,25 @@ export function InviteAcceptPage() {
           <span><CheckCircle2 size={16} /> {invitation.email}</span>
           <span><Clock3 size={16} /> Expires {new Date(invitation.expiresAt).toLocaleDateString()}</span>
         </div>
-        {!invitation.isValid ? <p className="error-text">This invitation is no longer valid.</p> : (
+        {!invitation.isValid ? <p className="error-text">This invitation is no longer valid.</p> : signedInWithWrongAccount ? (
+          <div className="invite-form">
+            <p className="error-text" role="alert">
+              This invitation was sent to <strong>{invitation.email}</strong>, but you are signed in as <strong>{user?.email}</strong>.
+            </p>
+            <button className="primary-button" type="button" onClick={() => void goToInvitedAccountLogin()}>
+              Sign in with invited email
+            </button>
+          </div>
+        ) : invitation.accountExists && !user ? (
+          <div className="invite-form">
+            <p>An account already exists for <strong>{invitation.email}</strong>. Sign in to securely accept this invitation.</p>
+            <button className="primary-button" type="button" onClick={() => void goToInvitedAccountLogin()}>
+              Sign in to accept
+            </button>
+          </div>
+        ) : (
           <form onSubmit={accept} className="invite-form">
-            {user ? <p>Signed in as <strong>{user.email}</strong></p> : (
+            {signedInWithInvitedClientAccount ? <p>Signed in as <strong>{user?.email}</strong></p> : (
               <>
                 <label className="field">Your name<input value={name} onChange={(event) => setName(event.target.value)} required /></label>
                 <label className="field">Create password<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} minLength={8} required /></label>

@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
-import { requireAuth } from "../middleware/auth.js";
+import { requireAuth, requireStaff } from "../middleware/auth.js";
 import type { AuthenticatedRequest } from "../types/http.js";
 import { insertActivityLog, listProjectActivity } from "../services/activity-log.service.js";
 import {
@@ -12,13 +12,17 @@ import {
   listProjectTeamMembers,
   listProjects,
   removeProjectTeamMember,
+  updateProjectTeamMemberRole,
   transitionProjectPhase,
-  updateProject
+  updateProject,
+  ProjectClientLockedError
 } from "../services/projects.service.js";
 import { hasProjectPermission } from "../services/rbac.service.js";
-import { createNotification } from "../services/notifications.service.js";
+import { createProjectSetup } from "../services/project-setup.service.js";
+import { createNotificationsForUsers } from "../services/notifications.service.js";
+import { storageProvider } from "../storage/local-storage.js";
 import { logAndSendForbidden } from "../utils/authz.js";
-import { sendConflict, sendNotFound, sendUnauthorized } from "../utils/http-error.js";
+import { sendConflict, sendError, sendNotFound, sendUnauthorized } from "../utils/http-error.js";
 import { sendValidationError } from "../utils/validation.js";
 
 export const projectsRouter = Router();
@@ -57,13 +61,48 @@ const projectCreateSchema = z.object({
   deadline: isoDateSchema
 });
 
+const projectSetupSchema = z.object({
+  clientId: z.string().uuid().optional(),
+  newClient: z.object({
+    name: z.string().trim().min(1).max(255),
+    company: z.string().trim().max(255).optional().nullable()
+  }).optional(),
+  name: z.string().trim().min(1).max(255),
+  description: z.string().trim().max(10000).optional().nullable(),
+  priority: priorityEnum.optional(),
+  budget: z.string().trim().max(32).optional().nullable(),
+  startDate: isoDateSchema,
+  deadline: isoDateSchema,
+  team: z.array(z.object({
+    userId: z.string().uuid(),
+    role: z.enum(["manager", "member", "viewer"])
+  })).max(100).optional().default([])
+}).superRefine((value, context) => {
+  if (Boolean(value.clientId) === Boolean(value.newClient)) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["clientId"],
+      message: "Choose one existing client or create one new client"
+    });
+  }
+  if (value.deadline < value.startDate) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["deadline"],
+      message: "Deadline must be on or after the start date"
+    });
+  }
+});
+
 const projectUpdateSchema = projectCreateSchema
   .omit({ currentPhase: true })
   .partial();
 
 const projectPhasePatchSchema = z.object({
   phase: projectPhaseEnum,
-  reason: z.string().trim().max(1000).optional().nullable()
+  reason: z.string().trim().max(1000).optional().nullable(),
+  clientUpdate: z.string().trim().max(2000).optional().nullable(),
+  confirmUnresolvedReviews: z.boolean().optional().default(false)
 });
 
 const idParamsSchema = z.object({
@@ -81,6 +120,46 @@ const projectTeamAddSchema = z.object({
 });
 
 projectsRouter.use(requireAuth);
+
+projectsRouter.post("/setup", requireStaff, async (req: AuthenticatedRequest, res) => {
+  if (!req.user) {
+    return sendUnauthorized(res, "Unauthorized");
+  }
+
+  const parsed = projectSetupSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return sendValidationError(res, "Invalid project setup payload", parsed.error);
+  }
+
+  const result = await createProjectSetup({
+    ...parsed.data,
+    createdBy: req.user.id
+  });
+  if (!result.ok) {
+    if (result.reason === "client_not_found") {
+      return sendNotFound(res, "Client not found");
+    }
+    return sendError(
+      res,
+      422,
+      "INVALID_TEAM_MEMBERS",
+      "Every project team member must be an active staff account",
+      { userIds: result.userIds }
+    );
+  }
+
+  return res.status(201).json({
+    data: result.project,
+    meta: {
+      clientCreated: result.clientCreated,
+      assignedTeamMemberCount: result.teamUserIds.length
+    }
+  });
+});
+
+const projectTeamRoleSchema = z.object({
+  role: z.enum(["manager", "member", "viewer"])
+});
 
 projectsRouter.get("/", async (req: AuthenticatedRequest, res) => {
   if (!req.user) {
@@ -262,8 +341,8 @@ projectsRouter.post("/:id/team", async (req: AuthenticatedRequest, res) => {
   });
 
   if (parsedBody.data.userId !== req.user.id) {
-    await createNotification({
-      userId: parsedBody.data.userId,
+    const assignmentTimestamp = new Date(result.member.created_at).toISOString();
+    await createNotificationsForUsers([parsedBody.data.userId], {
       projectId: parsedParams.data.id,
       type: "project_team_assigned",
       title: "Added to project",
@@ -271,12 +350,79 @@ projectsRouter.post("/:id/team", async (req: AuthenticatedRequest, res) => {
       metadata: {
         projectId: parsedParams.data.id,
         role: parsedBody.data.role,
-        addedByUserId: req.user.id
+        href: `/projects/${parsedParams.data.id}?tab=tasks`
       }
+    }, {
+      eventKey: `project:${parsedParams.data.id}:team:${parsedBody.data.userId}:${assignmentTimestamp}:${parsedBody.data.role}`
     });
   }
 
   return res.status(201).json({ data: result.member });
+});
+
+projectsRouter.patch("/:id/team/:userId", async (req: AuthenticatedRequest, res) => {
+  const parsedParams = projectTeamParamsSchema.safeParse(req.params);
+  if (!parsedParams.success) return sendValidationError(res, "Invalid project or user id", parsedParams.error);
+  const parsedBody = projectTeamRoleSchema.safeParse(req.body);
+  if (!parsedBody.success) return sendValidationError(res, "Invalid team role payload", parsedBody.error);
+  if (!req.user) return sendUnauthorized(res, "Unauthorized");
+
+  const project = await getProjectById(parsedParams.data.id);
+  if (!project) return sendNotFound(res, "Project not found");
+  const canManageTeam = await hasProjectPermission({
+    projectId: parsedParams.data.id,
+    userId: req.user.id,
+    permission: "team:manage"
+  });
+  if (!canManageTeam) {
+    return logAndSendForbidden({
+      req,
+      res,
+      permission: "team:manage",
+      projectId: parsedParams.data.id
+    });
+  }
+
+  const previous = (await listProjectTeamMembers(parsedParams.data.id))
+    .find((member) => member.user_id === parsedParams.data.userId);
+  if (!previous || previous.role === "owner") return sendNotFound(res, "Project team member not found");
+
+  const result = await updateProjectTeamMemberRole({
+    projectId: parsedParams.data.id,
+    userId: parsedParams.data.userId,
+    role: parsedBody.data.role
+  });
+  if (!result.ok) {
+    if (result.reason === "last_supervisor") {
+      return sendConflict(res, "Assign another active project supervisor before changing this role");
+    }
+    return sendNotFound(res, "Project team member not found");
+  }
+
+  await insertActivityLog({
+    userId: req.user.id,
+    action: "project_team_role_changed",
+    projectId: parsedParams.data.id,
+    details: { userId: parsedParams.data.userId, from: previous.role, to: parsedBody.data.role }
+  });
+  if (parsedParams.data.userId !== req.user.id) {
+    await createNotificationsForUsers([parsedParams.data.userId], {
+      projectId: parsedParams.data.id,
+      type: "project_team_role_changed",
+      title: "Project role updated",
+      message: `Your role on project "${project.name}" changed to ${parsedBody.data.role}.`,
+      metadata: {
+        projectId: parsedParams.data.id,
+        role: parsedBody.data.role,
+        changedByUserId: req.user.id,
+        href: `/projects/${parsedParams.data.id}?tab=team`
+      }
+    }, {
+      eventKey: `project:${parsedParams.data.id}:team-role:${parsedParams.data.userId}:${Date.now()}`,
+      excludeUserIds: [req.user.id]
+    });
+  }
+  return res.status(200).json({ data: result.member });
 });
 
 projectsRouter.delete("/:id/team/:userId", async (req: AuthenticatedRequest, res) => {
@@ -309,7 +455,13 @@ projectsRouter.delete("/:id/team/:userId", async (req: AuthenticatedRequest, res
   }
 
   const deleted = await removeProjectTeamMember(parsedParams.data.id, parsedParams.data.userId);
-  if (!deleted) {
+  if (!deleted.ok) {
+    if (deleted.reason === "last_supervisor") {
+      return sendConflict(res, "Assign another active project supervisor before removing this member");
+    }
+    if (deleted.reason === "assigned_tasks") {
+      return sendConflict(res, "Reassign this member's project tasks before removing them from the team");
+    }
     return sendNotFound(res, "Project team member not found");
   }
 
@@ -388,7 +540,13 @@ projectsRouter.put("/:id", async (req: AuthenticatedRequest, res) => {
     });
   }
 
-  const project = await updateProject(parsedParams.data.id, parsed.data);
+  let project;
+  try {
+    project = await updateProject(parsedParams.data.id, parsed.data);
+  } catch (error) {
+    if (error instanceof ProjectClientLockedError) return sendConflict(res, error.message);
+    throw error;
+  }
   if (!project) {
     return sendNotFound(res, "Project not found");
   }
@@ -442,12 +600,27 @@ projectsRouter.patch("/:id/phase", async (req: AuthenticatedRequest, res) => {
     projectId: parsedParams.data.id,
     nextPhase: parsed.data.phase,
     userId: req.user.id,
-    reason: parsed.data.reason ?? null
+    reason: parsed.data.reason ?? null,
+    clientUpdate: parsed.data.clientUpdate ?? null,
+    confirmUnresolvedReviews: parsed.data.confirmUnresolvedReviews
   });
 
   if (!result.ok) {
     if (result.reason === "not_found") {
       return sendNotFound(res, "Project not found");
+    }
+
+    if (result.reason === "delivery_confirmation_required") {
+      return sendError(
+        res,
+        409,
+        "DELIVERY_CONFIRMATION_REQUIRED",
+        "Unresolved reviews or incomplete tasks remain. Confirm that Delivery should close review actions and continue.",
+        {
+          unresolvedReviews: result.unresolvedReviews ?? 0,
+          incompleteTasks: result.incompleteTasks ?? 0
+        }
+      );
     }
 
     return sendConflict(res, "Invalid phase transition. Only next forward phase is allowed.");
@@ -457,26 +630,24 @@ projectsRouter.patch("/:id/phase", async (req: AuthenticatedRequest, res) => {
   const recipients = teamMembers.filter((member) => member.user_id !== req.user?.id);
 
   if (recipients.length > 0) {
-    await Promise.all(
-      recipients.map((member) =>
-        createNotification({
-          userId: member.user_id,
-          projectId: parsedParams.data.id,
-          type: "project_milestone_reached",
-          title: "Project milestone reached",
-          message: `Project "${result.project.name}" advanced to ${parsed.data.phase}.`,
-          metadata: {
-            projectId: parsedParams.data.id,
-            fromPhase: existingProject.current_phase,
-            toPhase: parsed.data.phase,
-            changedByUserId: actorUserId
-          }
-        })
-      )
-    );
+    await createNotificationsForUsers(recipients.map((member) => member.user_id), {
+      projectId: parsedParams.data.id,
+      type: "project_milestone_reached",
+      title: "Project milestone reached",
+      message: `Project "${result.project.name}" advanced to ${parsed.data.phase}.`,
+      metadata: {
+        projectId: parsedParams.data.id,
+        fromPhase: existingProject.current_phase,
+        toPhase: parsed.data.phase,
+        changedByUserId: actorUserId
+      }
+    }, {
+      eventKey: `project:${parsedParams.data.id}:phase:${parsed.data.phase}`,
+      excludeUserIds: [req.user.id]
+    });
   }
 
-  return res.status(200).json({ data: result.project });
+  return res.status(200).json({ data: result.project, meta: { warnings: result.warnings } });
 });
 
 projectsRouter.delete("/:id", async (req: AuthenticatedRequest, res) => {
@@ -509,7 +680,13 @@ projectsRouter.delete("/:id", async (req: AuthenticatedRequest, res) => {
   }
 
   const deleted = await deleteProject(parsedParams.data.id, req.user.id);
-  if (!deleted) {
+  if (!deleted.ok) {
+    if (deleted.reason === "delivery_locked") {
+      return sendConflict(res, "Delivery projects are retained as immutable history and cannot be deleted");
+    }
+    if (deleted.reason === "deliverable_history_exists") {
+      return sendConflict(res, "Projects with submitted deliverable versions cannot be deleted; archive them instead");
+    }
     return sendNotFound(res, "Project not found or not owned by user");
   }
 
@@ -519,6 +696,17 @@ projectsRouter.delete("/:id", async (req: AuthenticatedRequest, res) => {
     projectId: parsedParams.data.id,
     details: { projectId: parsedParams.data.id }
   });
+
+  const deletionResults = await Promise.allSettled(
+    deleted.localObjectKeys.map((objectKey) => storageProvider.delete(objectKey))
+  );
+  const failedObjectCleanupCount = deletionResults.filter((result) => result.status === "rejected").length;
+  if (failedObjectCleanupCount > 0) {
+    console.error("Project deleted but local object cleanup was incomplete", {
+      projectId: parsedParams.data.id,
+      failedObjectCleanupCount
+    });
+  }
 
   return res.status(204).send();
 });

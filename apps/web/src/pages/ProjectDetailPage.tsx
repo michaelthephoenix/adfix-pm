@@ -1,8 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
-import { DndContext, DragOverlay, type DragEndEvent, useDraggable, useDroppable } from "@dnd-kit/core";
-import { CalendarDays, GripVertical, Link2, MessageSquare, Plus, UploadCloud, UserPlus, UserRound } from "lucide-react";
+import { Link, useParams, useSearchParams } from "react-router-dom";
+import { DndContext, DragOverlay, type DragEndEvent } from "@dnd-kit/core";
+import { FileCheck2, Link2, MessageSquare, Plus, UploadCloud, UserPlus } from "lucide-react";
 import { apiDownload, apiRequest, ApiError } from "../lib/api";
 import { useAuth } from "../state/auth";
 import { useUI } from "../state/ui";
@@ -11,6 +11,19 @@ import { ProjectDeliverablesPanel } from "../components/ProjectDeliverablesPanel
 import { PageHeader } from "../components/ui/PageHeader";
 import { Button } from "../components/ui/Button";
 import { Dialog } from "../components/ui/Dialog";
+import { TaskDragPreview, TaskPhaseColumn } from "../features/project-tasks/TaskBoard";
+import {
+  createTaskDraft,
+  formatLabel,
+  taskLabelColors,
+  taskPhases,
+  type DeliverableSelection,
+  type Task,
+  type TaskDraft,
+  type TaskLabel,
+  type TaskLabelColor,
+  type TaskPhase
+} from "../features/project-tasks/model";
 
 type ProjectDetailResponse = {
   data: {
@@ -40,40 +53,12 @@ type TasksListResponse = {
   };
 };
 
-type Task = {
-  id: string;
-  title: string;
-  phase: TaskPhase;
-  status: "pending" | "in_progress" | "completed" | "blocked";
-  priority: string;
-  due_date: string | null;
-  assigned_to: string | null;
-  assignees: Array<{ id: string; name: string; avatar_url: string | null }>;
-  labels: TaskLabel[];
+type ProjectDeliverablesResponse = {
+  data: Array<{ id: string; title: string; status: string }>;
 };
 
-type TaskLabelColor = "violet" | "blue" | "green" | "amber" | "rose" | "slate";
-type TaskLabel = { id?: string; name: string; color: TaskLabelColor };
-type TaskDraft = { assigneeIds: string[]; dueDate: string; priority: string; labels: TaskLabel[] };
-
-const taskLabelColors: Array<{ id: TaskLabelColor; label: string }> = [
-  { id: "violet", label: "Violet" },
-  { id: "blue", label: "Blue" },
-  { id: "green", label: "Green" },
-  { id: "amber", label: "Amber" },
-  { id: "rose", label: "Rose" },
-  { id: "slate", label: "Slate" }
-];
-
-const taskPhases = [
-  { id: "client_acquisition", label: "Client acquisition" },
-  { id: "strategy_planning", label: "Strategic planning" },
-  { id: "production", label: "Production" },
-  { id: "post_production", label: "Post-production" },
-  { id: "delivery", label: "Delivery" }
-] as const;
-
-type TaskPhase = (typeof taskPhases)[number]["id"];
+type ProjectTab = "overview" | "tasks" | "files" | "deliverables" | "activity" | "team";
+const projectTabs: ProjectTab[] = ["overview", "tasks", "files", "deliverables", "activity", "team"];
 
 type TaskCommentsResponse = {
   data: Array<{
@@ -117,10 +102,13 @@ type ActivityListResponse = {
 type ProjectTeamResponse = {
   data: Array<{
     user_id: string;
-    role: "manager" | "member" | "viewer";
+    role: "owner" | "manager" | "member" | "viewer";
     user_name: string;
     user_email: string;
     created_at: string;
+    assigned_task_count: string;
+    open_task_count: string;
+    overdue_task_count: string;
   }>;
 };
 
@@ -135,226 +123,53 @@ type UsersResponse = {
   };
 };
 
-function getStatusActions(status: Task["status"]) {
-  if (status === "pending") return [{ status: "in_progress" as const, label: "Start" }];
-  if (status === "in_progress") {
-    return [
-      { status: "completed" as const, label: "Complete" },
-      { status: "blocked" as const, label: "Block" }
-    ];
-  }
-  if (status === "blocked") return [{ status: "in_progress" as const, label: "Resume" }];
-  return [];
-}
-
-function formatLabel(value: string) {
-  return value
-    .split("_")
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
-}
-
-function getTaskBadgeClass(kind: "status" | "priority", value: string) {
-  const normalized = value.replaceAll("_", "-");
-  return `badge badge-${kind} badge-${kind}-${normalized}`;
-}
-
-type TaskAssignee = Task["assignees"][number];
-
-function getAssigneeInitials(name: string) {
-  return name
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((part) => part.charAt(0).toUpperCase())
-    .join("") || "?";
-}
-
-function getAssigneeTone(name: string) {
-  const checksum = Array.from(name).reduce((total, character) => total + character.charCodeAt(0), 0);
-  return checksum % 5;
-}
-
-function AssigneeAvatar({ assignee, stackOrder }: { assignee: TaskAssignee; stackOrder: number }) {
-  const [imageFailed, setImageFailed] = useState(false);
-
-  useEffect(() => setImageFailed(false), [assignee.avatar_url]);
-
-  if (assignee.avatar_url && !imageFailed) {
-    return (
-      <img
-        className="task-assignee-avatar"
-        src={assignee.avatar_url}
-        alt=""
-        title={assignee.name}
-        style={{ zIndex: stackOrder }}
-        onError={() => setImageFailed(true)}
-      />
-    );
-  }
-
-  return (
-    <span
-      className={`task-assignee-avatar task-assignee-avatar-fallback task-assignee-avatar-tone-${getAssigneeTone(assignee.name)}`}
-      title={assignee.name}
-      style={{ zIndex: stackOrder }}
-    >
-      {getAssigneeInitials(assignee.name)}
-    </span>
-  );
-}
-
-function TaskAssigneeGroup({ task }: { task: Task }) {
-  const assignees = task.assignees ?? [];
-  if (assignees.length === 0) {
-    return <span className="task-assignee-empty"><UserRound size={13} /> Unassigned</span>;
-  }
-
-  const visibleAssignees = assignees.slice(0, 3);
-  const surplus = assignees.length - visibleAssignees.length;
-  const assigneeNames = assignees.map((assignee) => assignee.name).join(", ");
-  const surplusNames = assignees.slice(3).map((assignee) => assignee.name).join(", ");
-
-  return (
-    <span className="task-assignee-group" role="img" aria-label={`Assigned to ${assigneeNames}`}>
-      <span className="task-assignee-stack" aria-hidden="true">
-        {visibleAssignees.map((assignee, index) => (
-          <AssigneeAvatar key={assignee.id} assignee={assignee} stackOrder={visibleAssignees.length - index + 1} />
-        ))}
-        {surplus > 0 ? (
-          <span className="task-assignee-avatar task-assignee-surplus" title={surplusNames} style={{ zIndex: 1 }}>
-            +{surplus}
-          </span>
-        ) : null}
-      </span>
-    </span>
-  );
-}
-
-function createTaskDraft(task: Task): TaskDraft {
-  return {
-    assigneeIds: (task.assignees ?? []).map((assignee) => assignee.id),
-    dueDate: task.due_date?.slice(0, 10) ?? "",
-    priority: task.priority,
-    labels: task.labels ?? []
-  };
-}
-
-type TaskCardProps = {
-  task: Task;
-  canWrite: boolean;
-  selected: boolean;
-  onToggleSelected: () => void;
-  onOpen: () => void;
-  onStatusChange: (status: Task["status"]) => void;
-};
-
-function TaskKanbanCard({ task, canWrite, selected, onToggleSelected, onOpen, onStatusChange }: TaskCardProps) {
-  const draggable = useDraggable({ id: `task:${task.id}`, data: { task }, disabled: !canWrite });
-  const overdue = Boolean(task.due_date && new Date(task.due_date).getTime() < Date.now() && task.status !== "completed");
-
-  return (
-    <article ref={draggable.setNodeRef} className={`task-kanban-card ${draggable.isDragging ? "dragging" : ""}`}>
-      <div className="task-kanban-card-topline">
-        <label className="task-select-control">
-          <input type="checkbox" checked={selected} disabled={!canWrite} onChange={onToggleSelected} />
-          <span className={`badge badge-priority badge-priority-${task.priority}`}>{task.priority}</span>
-        </label>
-        <button className="drag-handle" type="button" aria-label={`Move ${task.title}`} disabled={!canWrite} {...draggable.listeners} {...draggable.attributes}>
-          <GripVertical size={16} />
-        </button>
-      </div>
-      <button type="button" className="task-kanban-title" onClick={onOpen}>{task.title}</button>
-      {(task.labels?.length ?? 0) > 0 ? (
-        <div className="task-card-labels" aria-label="Task labels">
-          {task.labels.slice(0, 3).map((label) => <span key={label.id ?? label.name} className={`task-label task-label-${label.color}`}>{label.name}</span>)}
-          {task.labels.length > 3 ? <span className="task-label task-label-more">+{task.labels.length - 3}</span> : null}
-        </div>
-      ) : null}
-      <span className={getTaskBadgeClass("status", task.status)}>{formatLabel(task.status)}</span>
-      <div className="task-kanban-meta">
-        <span className={overdue ? "deadline-overdue" : ""}><CalendarDays size={13} /> {task.due_date ? new Date(task.due_date).toLocaleDateString() : "No due date"}</span>
-        <TaskAssigneeGroup task={task} />
-      </div>
-      <div className="task-kanban-actions">
-        {getStatusActions(task.status).map((action) => (
-          <Button key={action.status} variant="ghost" size="sm" disabled={!canWrite} onClick={() => onStatusChange(action.status)}>{action.label}</Button>
-        ))}
-        <Button variant="ghost" size="sm" icon={<MessageSquare size={13} />} onClick={onOpen}>Details</Button>
-      </div>
-    </article>
-  );
-}
-
-function TaskDragPreview({ task }: { task: Task }) {
-  return (
-    <article className="task-kanban-card task-drag-overlay" aria-hidden="true">
-      <div className="task-kanban-card-topline"><span className={`badge badge-priority badge-priority-${task.priority}`}>{task.priority}</span><GripVertical size={16} /></div>
-      <div className="task-kanban-title">{task.title}</div>
-      <span className={getTaskBadgeClass("status", task.status)}>{formatLabel(task.status)}</span>
-      {(task.labels?.length ?? 0) > 0 ? <div className="task-card-labels">{task.labels.slice(0, 2).map((label) => <span key={label.id ?? label.name} className={`task-label task-label-${label.color}`}>{label.name}</span>)}</div> : null}
-      <div className="task-kanban-meta"><TaskAssigneeGroup task={task} /></div>
-    </article>
-  );
-}
-
-type TaskPhaseColumnProps = {
-  phase: (typeof taskPhases)[number];
-  tasks: Task[];
-  canWrite: boolean;
-  selectedTaskIds: string[];
-  onToggleSelected: (taskId: string) => void;
-  onOpenTask: (taskId: string) => void;
-  onStatusChange: (taskId: string, status: Task["status"]) => void;
-};
-
-function TaskPhaseColumn({ phase, tasks, canWrite, selectedTaskIds, onToggleSelected, onOpenTask, onStatusChange }: TaskPhaseColumnProps) {
-  const droppable = useDroppable({ id: phase.id });
-  return (
-    <section ref={droppable.setNodeRef} className={`task-phase-column phase-${phase.id} ${droppable.isOver ? "drop-target" : ""}`}>
-      <header className="task-phase-column-header"><span className="phase-dot" /><h3>{phase.label}</h3><span className="phase-count">{tasks.length}</span></header>
-      <div className="task-phase-column-body">
-        {tasks.map((task) => (
-          <TaskKanbanCard
-            key={task.id}
-            task={task}
-            canWrite={canWrite}
-            selected={selectedTaskIds.includes(task.id)}
-            onToggleSelected={() => onToggleSelected(task.id)}
-            onOpen={() => onOpenTask(task.id)}
-            onStatusChange={(status) => onStatusChange(task.id, status)}
-          />
-        ))}
-        {tasks.length === 0 ? <p className="phase-empty">Drop a task here</p> : null}
-      </div>
-    </section>
-  );
-}
-
 export function ProjectDetailPage() {
   const { projectId } = useParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { accessToken } = useAuth();
   const ui = useUI();
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState<"overview" | "tasks" | "files" | "deliverables" | "activity" | "team">("tasks");
+  const initialTab = searchParams.get("tab");
+  const [activeTab, setActiveTab] = useState<ProjectTab>(projectTabs.includes(initialTab as ProjectTab) ? initialTab as ProjectTab : "tasks");
   const [title, setTitle] = useState("");
   const [phase, setPhase] = useState<TaskPhase>("production");
+  const [taskDescription, setTaskDescription] = useState("");
+  const [taskAssigneeIds, setTaskAssigneeIds] = useState<string[]>([]);
+  const [taskPriority, setTaskPriority] = useState<"low" | "medium" | "high" | "urgent">("medium");
+  const [taskDueDate, setTaskDueDate] = useState("");
+  const [taskLabels, setTaskLabels] = useState<TaskLabel[]>([]);
+  const [taskNewLabelName, setTaskNewLabelName] = useState("");
+  const [taskNewLabelColor, setTaskNewLabelColor] = useState<TaskLabelColor>("violet");
   const [taskCreateOpen, setTaskCreateOpen] = useState(false);
+  const [taskDeliverableMode, setTaskDeliverableMode] = useState<"none" | "existing" | "new">("none");
+  const [taskDeliverableId, setTaskDeliverableId] = useState("");
+  const [taskDeliverableTitle, setTaskDeliverableTitle] = useState("");
+  const [taskDeliverableRequired, setTaskDeliverableRequired] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [phaseError, setPhaseError] = useState<string | null>(null);
   const [taskDrafts, setTaskDrafts] = useState<Record<string, TaskDraft>>({});
-  const [taskActionState, setTaskActionState] = useState<Record<string, "idle" | "saving" | "saved" | "error">>(
-    {}
-  );
   const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([]);
   const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [optimisticTaskPhases, setOptimisticTaskPhases] = useState<Record<string, TaskPhase>>({});
-  const [bulkTaskAction, setBulkTaskAction] = useState<"" | "start" | "complete" | "delete">("");
+  const [bulkTaskAction, setBulkTaskAction] = useState<"" | "start" | "complete" | "delete" | "assign" | "phase" | "priority" | "label">("");
+  const [bulkAssigneeId, setBulkAssigneeId] = useState("");
+  const [bulkPhase, setBulkPhase] = useState<TaskPhase>("production");
+  const [bulkPriority, setBulkPriority] = useState<"low" | "medium" | "high" | "urgent">("medium");
+  const [bulkLabelName, setBulkLabelName] = useState("");
+  const [bulkLabelColor, setBulkLabelColor] = useState<TaskLabelColor>("violet");
+  const [bulkError, setBulkError] = useState<string | null>(null);
+  const [mobileTaskPhase, setMobileTaskPhase] = useState<TaskPhase>("production");
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [taskDeliverableDialogOpen, setTaskDeliverableDialogOpen] = useState(false);
+  const [detailDeliverableMode, setDetailDeliverableMode] = useState<"existing" | "new">("existing");
+  const [detailDeliverableId, setDetailDeliverableId] = useState("");
+  const [detailDeliverableTitle, setDetailDeliverableTitle] = useState("");
+  const [detailDeliverableError, setDetailDeliverableError] = useState<string | null>(null);
   const [commentBody, setCommentBody] = useState("");
   const [assigneePickerOpen, setAssigneePickerOpen] = useState(false);
   const [newTaskLabelName, setNewTaskLabelName] = useState("");
   const [newTaskLabelColor, setNewTaskLabelColor] = useState<TaskLabelColor>("violet");
+  const [taskDetailError, setTaskDetailError] = useState<string | null>(null);
   const [fileLinkName, setFileLinkName] = useState("");
   const [fileLinkUrl, setFileLinkUrl] = useState("");
   const [fileLinkType, setFileLinkType] = useState("asset");
@@ -366,6 +181,7 @@ export function ProjectDetailPage() {
   const [teamRole, setTeamRole] = useState<"manager" | "member" | "viewer">("member");
   const [teamFormError, setTeamFormError] = useState<string | null>(null);
   const [teamMemberDialogOpen, setTeamMemberDialogOpen] = useState(false);
+  const [teamActionError, setTeamActionError] = useState<string | null>(null);
 
   const projectQuery = useQuery({
     queryKey: ["project-detail", projectId],
@@ -383,6 +199,14 @@ export function ProjectDetailPage() {
         accessToken: accessToken ?? undefined
       }),
     enabled: Boolean(projectId && accessToken)
+  });
+
+  const deliverablesQuery = useQuery({
+    queryKey: ["project-deliverables", projectId],
+    queryFn: () => apiRequest<ProjectDeliverablesResponse>(`/deliverables/project/${projectId}`, {
+      accessToken: accessToken ?? undefined
+    }),
+    enabled: Boolean(projectId && accessToken && (taskCreateOpen || selectedTaskId || taskDeliverableDialogOpen))
   });
 
   const filesQuery = useQuery({
@@ -450,6 +274,7 @@ export function ProjectDetailPage() {
       queryClient.invalidateQueries({ queryKey: ["project-files", projectId] }),
       queryClient.invalidateQueries({ queryKey: ["project-activity", projectId] }),
       queryClient.invalidateQueries({ queryKey: ["project-team", projectId] }),
+      queryClient.invalidateQueries({ queryKey: ["project-deliverables", projectId] }),
       queryClient.invalidateQueries({ queryKey: ["project-detail", projectId] })
     ]);
   };
@@ -460,20 +285,35 @@ export function ProjectDetailPage() {
   };
 
   const createTaskMutation = useMutation({
-    mutationFn: (payload: { title: string; phase: TaskPhase }) =>
+    mutationFn: (payload: {
+      title: string;
+      description: string | null;
+      phase: TaskPhase;
+      priority: "low" | "medium" | "high" | "urgent";
+      dueDate: string | null;
+      assigneeIds: string[];
+      labels: TaskLabel[];
+      deliverableRequired: boolean;
+      deliverable?: DeliverableSelection;
+    }) =>
       apiRequest(`/tasks`, {
         method: "POST",
         accessToken: accessToken ?? undefined,
         body: {
           projectId,
           title: payload.title,
-          phase: payload.phase
+          description: payload.description,
+          phase: payload.phase,
+          priority: payload.priority,
+          dueDate: payload.dueDate,
+          assigneeIds: payload.assigneeIds,
+          labels: payload.labels.map(({ name, color }) => ({ name, color })),
+          deliverableRequired: payload.deliverableRequired,
+          deliverable: payload.deliverable
         }
       }),
     onSuccess: async () => {
-      setTitle("");
-      setFormError(null);
-      setTaskCreateOpen(false);
+      resetTaskCreateFields();
       await refreshData();
     },
     onError: (error) => {
@@ -485,24 +325,42 @@ export function ProjectDetailPage() {
     }
   });
 
+  const attachTaskDeliverableMutation = useMutation({
+    mutationFn: (input: { taskId: string; selection: DeliverableSelection }) =>
+      apiRequest(`/tasks/${input.taskId}/deliverables`, {
+        method: "POST",
+        accessToken: accessToken ?? undefined,
+        body: input.selection
+      }),
+    onSuccess: async () => {
+      setTaskDeliverableDialogOpen(false);
+      setDetailDeliverableMode("existing");
+      setDetailDeliverableId("");
+      setDetailDeliverableTitle("");
+      setDetailDeliverableError(null);
+      ui.success("Deliverable connected to this task.");
+      await refreshData();
+    },
+    onError: (error) => {
+      setDetailDeliverableError(error instanceof ApiError ? error.message : "Could not connect the deliverable.");
+    }
+  });
+
   const statusMutation = useMutation({
     mutationFn: (input: { taskId: string; status: Task["status"] }) =>
       apiRequest(`/tasks/${input.taskId}/status`, {
         method: "PATCH",
         accessToken: accessToken ?? undefined,
         body: { status: input.status }
-      }),
-    onSuccess: async (_, variables) => {
-      setTaskActionState((previous) => ({ ...previous, [variables.taskId]: "saved" }));
+    }),
+    onSuccess: async () => {
       await refreshData();
     },
-    onError: (_error, variables) => {
-      setTaskActionState((previous) => ({ ...previous, [variables.taskId]: "error" }));
-    }
+    onError: (error) => ui.error(error instanceof ApiError ? error.message : "Could not update task status.")
   });
 
   const updateTaskMutation = useMutation({
-    mutationFn: (input: { taskId: string; assigneeIds: string[]; dueDate: string; priority: string; labels: TaskLabel[] }) =>
+    mutationFn: (input: { taskId: string; assigneeIds: string[]; dueDate: string; priority: string; labels: TaskLabel[]; deliverableRequired: boolean }) =>
       apiRequest(`/tasks/${input.taskId}`, {
         method: "PUT",
         accessToken: accessToken ?? undefined,
@@ -510,15 +368,17 @@ export function ProjectDetailPage() {
           assigneeIds: input.assigneeIds,
           dueDate: input.dueDate ? input.dueDate : null,
           priority: input.priority,
+          deliverableRequired: input.deliverableRequired,
           labels: input.labels.map(({ name, color }) => ({ name, color }))
         }
-      }),
-    onSuccess: async (_, variables) => {
-      setTaskActionState((previous) => ({ ...previous, [variables.taskId]: "saved" }));
+    }),
+    onSuccess: async () => {
+      setTaskDetailError(null);
       await refreshData();
+      ui.success("Task details saved.");
     },
-    onError: (_error, variables) => {
-      setTaskActionState((previous) => ({ ...previous, [variables.taskId]: "error" }));
+    onError: (error) => {
+      setTaskDetailError(error instanceof ApiError ? error.message : "Could not save task details.");
     }
   });
 
@@ -625,7 +485,9 @@ export function ProjectDetailPage() {
       }),
     onSuccess: async () => {
       setTeamFormError(null);
+      setTeamActionError(null);
       setTeamUserId("");
+      setTeamRole("member");
       setTeamMemberDialogOpen(false);
       await refreshData();
     },
@@ -638,6 +500,23 @@ export function ProjectDetailPage() {
     }
   });
 
+  const updateTeamRoleMutation = useMutation({
+    mutationFn: (input: { userId: string; role: "manager" | "member" | "viewer" }) =>
+      apiRequest(`/projects/${projectId}/team/${input.userId}`, {
+        method: "PATCH",
+        accessToken: accessToken ?? undefined,
+        body: { role: input.role }
+      }),
+    onSuccess: async () => {
+      setTeamActionError(null);
+      await refreshData();
+      ui.success("Project role updated.");
+    },
+    onError: (error) => {
+      setTeamActionError(error instanceof ApiError ? error.message : "Could not update this project role.");
+    }
+  });
+
   const removeTeamMemberMutation = useMutation({
     mutationFn: (userId: string) =>
       apiRequest(`/projects/${projectId}/team/${userId}`, {
@@ -645,22 +524,25 @@ export function ProjectDetailPage() {
         accessToken: accessToken ?? undefined
       }),
     onSuccess: async () => {
+      setTeamActionError(null);
       await refreshData();
       ui.success("Team member removed.");
     },
-    onError: () => {
-      ui.error("Could not remove team member.");
+    onError: (error) => {
+      setTeamActionError(error instanceof ApiError ? error.message : "Could not remove team member.");
     }
   });
 
   const phaseTransitionMutation = useMutation({
-    mutationFn: (nextPhase: string) =>
+    mutationFn: (input: { nextPhase: string; confirmUnresolvedReviews: boolean }) =>
       apiRequest(`/projects/${projectId}/phase`, {
         method: "PATCH",
         accessToken: accessToken ?? undefined,
         body: {
-          phase: nextPhase,
-          reason: null
+          phase: input.nextPhase,
+          reason: null,
+          clientUpdate: null,
+          confirmUnresolvedReviews: input.confirmUnresolvedReviews
         }
       }),
     onSuccess: async () => {
@@ -716,11 +598,37 @@ export function ProjectDetailPage() {
       }),
     onSuccess: async (_, nextStatus) => {
       setSelectedTaskIds([]);
+      setBulkError(null);
       await refreshData();
       ui.success(`Selected tasks updated to ${formatLabel(nextStatus)}.`);
     },
-    onError: () => {
-      ui.error("Could not update selected tasks.");
+    onError: (error) => {
+      setBulkError(error instanceof ApiError ? error.message : "Could not update selected tasks.");
+    }
+  });
+
+  const bulkUpdateMutation = useMutation({
+    mutationFn: (updates: {
+      assigneeIds?: string[];
+      phase?: TaskPhase;
+      priority?: "low" | "medium" | "high" | "urgent";
+      addLabels?: Array<{ name: string; color: TaskLabelColor }>;
+    }) => apiRequest("/tasks/bulk/update", {
+      method: "POST",
+      accessToken: accessToken ?? undefined,
+      body: { taskIds: selectedTaskIds, ...updates }
+    }),
+    onSuccess: async () => {
+      setSelectedTaskIds([]);
+      setBulkTaskAction("");
+      setBulkAssigneeId("");
+      setBulkLabelName("");
+      setBulkError(null);
+      await refreshData();
+      ui.success("Selected tasks updated.");
+    },
+    onError: (error) => {
+      setBulkError(error instanceof ApiError ? error.message : "Could not update selected tasks.");
     }
   });
 
@@ -735,14 +643,15 @@ export function ProjectDetailPage() {
       }),
     onSuccess: async () => {
       setSelectedTaskIds([]);
+      setBulkError(null);
       if (selectedTaskId && selectedTaskIds.includes(selectedTaskId)) {
         setSelectedTaskId(null);
       }
       await refreshData();
       ui.success("Selected tasks deleted.");
     },
-    onError: () => {
-      ui.error("Could not delete selected tasks.");
+    onError: (error) => {
+      setBulkError(error instanceof ApiError ? error.message : "Could not delete selected tasks.");
     }
   });
 
@@ -756,14 +665,16 @@ export function ProjectDetailPage() {
             assigneeIds: (task.assignees ?? []).map((assignee) => assignee.id),
             dueDate: task.due_date ? task.due_date.slice(0, 10) : "",
             priority: task.priority,
-            labels: task.labels ?? []
+            labels: task.labels ?? [],
+            deliverableRequired: task.deliverable_required
           };
         } else {
           next[task.id] = {
             ...next[task.id],
             priority: next[task.id].priority || task.priority,
             assigneeIds: next[task.id].assigneeIds ?? (task.assignees ?? []).map((assignee) => assignee.id),
-            labels: next[task.id].labels ?? (task.labels ?? [])
+            labels: next[task.id].labels ?? (task.labels ?? []),
+            deliverableRequired: next[task.id].deliverableRequired ?? task.deliverable_required
           };
         }
       }
@@ -776,6 +687,23 @@ export function ProjectDetailPage() {
     const availableIds = new Set(tasksQuery.data.data.map((task) => task.id));
     setSelectedTaskIds((previous) => previous.filter((id) => availableIds.has(id)));
   }, [tasksQuery.data?.data]);
+
+  useEffect(() => {
+    const requestedTab = searchParams.get("tab");
+    if (projectTabs.includes(requestedTab as ProjectTab)) setActiveTab(requestedTab as ProjectTab);
+    const requestedTask = searchParams.get("task");
+    if (requestedTask && tasksQuery.data?.data.some((task) => task.id === requestedTask)) {
+      setActiveTab("tasks");
+      setSelectedTaskId(requestedTask);
+    }
+  }, [searchParams, tasksQuery.data?.data]);
+
+  useEffect(() => {
+    const currentPhase = projectQuery.data?.data.current_phase as TaskPhase | undefined;
+    if (!currentPhase || !taskPhases.some((option) => option.id === currentPhase)) return;
+    setMobileTaskPhase(currentPhase);
+    if (!taskCreateOpen) setPhase(currentPhase);
+  }, [projectQuery.data?.data.current_phase, taskCreateOpen]);
 
   if (!projectId) {
     return <div className="state-card">Missing project id.</div>;
@@ -832,6 +760,140 @@ export function ProjectDetailPage() {
   }));
   const selectedTask = displayedTasks.find((task) => task.id === selectedTaskId) ?? null;
   const selectedTaskDraft = selectedTask ? taskDrafts[selectedTask.id] ?? createTaskDraft(selectedTask) : null;
+  const assignableProjectMembers = (teamQuery.data?.data ?? []).filter((member) => member.role !== "viewer");
+  const availableTeamUsers = (usersQuery.data?.data ?? []).filter(
+    (user) => !(teamQuery.data?.data ?? []).some((member) => member.user_id === user.id)
+  );
+  const availableDeliverables = deliverablesQuery.data?.data ?? [];
+  const unlinkedDeliverables = selectedTask
+    ? availableDeliverables.filter((deliverable) => !selectedTask.deliverables.some((linked) => linked.id === deliverable.id))
+    : availableDeliverables;
+  const taskCreateValid = Boolean(
+    title.trim()
+    && (taskDeliverableMode === "none"
+      || (taskDeliverableMode === "existing" && taskDeliverableId)
+      || (taskDeliverableMode === "new" && taskDeliverableTitle.trim()))
+  );
+
+  const taskCreateDirty = Boolean(
+    title.trim()
+    || taskDescription.trim()
+    || taskAssigneeIds.length
+    || taskPriority !== "medium"
+    || taskDueDate
+    || taskLabels.length
+    || taskNewLabelName.trim()
+    || phase !== project.current_phase
+    || taskDeliverableMode !== "none"
+    || taskDeliverableRequired
+  );
+  const taskDetailDirty = Boolean(selectedTask && selectedTaskDraft && (
+    selectedTaskDraft.priority !== selectedTask.priority
+    || selectedTaskDraft.dueDate !== (selectedTask.due_date?.slice(0, 10) ?? "")
+    || selectedTaskDraft.deliverableRequired !== selectedTask.deliverable_required
+    || JSON.stringify([...selectedTaskDraft.assigneeIds].sort()) !== JSON.stringify(selectedTask.assignees.map((assignee) => assignee.id).sort())
+    || JSON.stringify(selectedTaskDraft.labels.map(({ name, color }) => ({ name, color })).sort((a, b) => a.name.localeCompare(b.name)))
+      !== JSON.stringify(selectedTask.labels.map(({ name, color }) => ({ name, color })).sort((a, b) => a.name.localeCompare(b.name)))
+  )) || Boolean(newTaskLabelName.trim() || commentBody.trim());
+  const taskDeliverableDirty = Boolean(detailDeliverableMode !== "existing" || detailDeliverableId || detailDeliverableTitle.trim());
+  const teamMemberDirty = Boolean(teamUserId || teamRole !== "member");
+  const supervisorCount = (teamQuery.data?.data ?? []).filter((member) => member.role === "owner" || member.role === "manager").length;
+
+  const confirmDiscard = async (dirty: boolean) => {
+    if (!dirty) return true;
+    return ui.confirm({
+      title: "Discard unsaved changes?",
+      message: "The information entered in this dialog has not been saved.",
+      confirmLabel: "Discard changes",
+      cancelLabel: "Keep editing",
+      tone: "warning"
+    });
+  };
+
+  function resetTaskCreateFields() {
+    setTaskCreateOpen(false);
+    setTitle("");
+    setTaskDescription("");
+    setTaskAssigneeIds([]);
+    setTaskPriority("medium");
+    setTaskDueDate("");
+    setTaskLabels([]);
+    setTaskNewLabelName("");
+    setTaskNewLabelColor("violet");
+    setPhase((project.current_phase as TaskPhase) ?? "production");
+    setTaskDeliverableMode("none");
+    setTaskDeliverableId("");
+    setTaskDeliverableTitle("");
+    setTaskDeliverableRequired(false);
+    setFormError(null);
+  }
+
+  const requestCloseTaskCreate = async () => {
+    if (await confirmDiscard(taskCreateDirty)) resetTaskCreateFields();
+  };
+
+  const closeTaskDetails = () => {
+    setSelectedTaskId(null);
+    setTaskDetailError(null);
+    setCommentBody("");
+    setAssigneePickerOpen(false);
+    setNewTaskLabelName("");
+    const next = new URLSearchParams(searchParams);
+    next.delete("task");
+    setSearchParams(next, { replace: true });
+  };
+
+  const requestCloseTaskDetails = async () => {
+    if (await confirmDiscard(taskDetailDirty)) closeTaskDetails();
+  };
+
+  const openDeliverablesFromTask = async () => {
+    if (!await confirmDiscard(taskDetailDirty)) return;
+    closeTaskDetails();
+    selectTab("deliverables");
+  };
+
+  const resetTaskDeliverableDialog = () => {
+    setTaskDeliverableDialogOpen(false);
+    setDetailDeliverableMode("existing");
+    setDetailDeliverableId("");
+    setDetailDeliverableTitle("");
+    setDetailDeliverableError(null);
+  };
+
+  const requestCloseTaskDeliverableDialog = async () => {
+    if (await confirmDiscard(taskDeliverableDirty)) resetTaskDeliverableDialog();
+  };
+
+  const resetTeamMemberDialog = () => {
+    setTeamMemberDialogOpen(false);
+    setTeamUserId("");
+    setTeamRole("member");
+    setTeamFormError(null);
+  };
+
+  const requestCloseTeamMemberDialog = async () => {
+    if (await confirmDiscard(teamMemberDirty)) resetTeamMemberDialog();
+  };
+
+  const openTaskDetails = (taskId: string) => {
+    setTaskDetailError(null);
+    setActiveTab("tasks");
+    setSelectedTaskId(taskId);
+    const next = new URLSearchParams(searchParams);
+    next.set("tab", "tasks");
+    next.set("task", taskId);
+    setSearchParams(next, { replace: true });
+  };
+
+  const selectTab = (tab: ProjectTab) => {
+    setActiveTab(tab);
+    const next = new URLSearchParams(searchParams);
+    next.set("tab", tab);
+    if (tab !== "tasks") next.delete("task");
+    if (tab !== "tasks") setSelectedTaskId(null);
+    setSearchParams(next, { replace: true });
+  };
 
   const toggleTaskAssignee = (userId: string) => {
     if (!selectedTask || !selectedTaskDraft) return;
@@ -886,6 +948,7 @@ export function ProjectDetailPage() {
 
   const applyBulkTaskAction = async () => {
     if (!bulkTaskAction || selectedTaskIds.length === 0) return;
+    setBulkError(null);
 
     if (bulkTaskAction === "start") {
       bulkStatusMutation.mutate("in_progress");
@@ -893,7 +956,37 @@ export function ProjectDetailPage() {
     }
 
     if (bulkTaskAction === "complete") {
+      const selectedTasks = displayedTasks.filter((task) => selectedTaskIds.includes(task.id));
+      if (selectedTasks.some((task) => task.deliverable_required)) {
+        ui.error("Tasks that require a deliverable complete through the submission workflow.");
+        return;
+      }
       bulkStatusMutation.mutate("completed");
+      return;
+    }
+
+    if (bulkTaskAction === "assign") {
+      if (!bulkAssigneeId) {
+        setBulkError("Choose the team member who should own these tasks.");
+        return;
+      }
+      bulkUpdateMutation.mutate({ assigneeIds: [bulkAssigneeId] });
+      return;
+    }
+    if (bulkTaskAction === "phase") {
+      bulkUpdateMutation.mutate({ phase: bulkPhase });
+      return;
+    }
+    if (bulkTaskAction === "priority") {
+      bulkUpdateMutation.mutate({ priority: bulkPriority });
+      return;
+    }
+    if (bulkTaskAction === "label") {
+      if (!bulkLabelName.trim()) {
+        setBulkError("Enter the label to add to the selected tasks.");
+        return;
+      }
+      bulkUpdateMutation.mutate({ addLabels: [{ name: bulkLabelName.trim(), color: bulkLabelColor }] });
       return;
     }
 
@@ -908,21 +1001,43 @@ export function ProjectDetailPage() {
 
   const advanceProjectPhase = async () => {
     if (!nextPhase) return;
+    let confirmUnresolvedReviews = false;
     if (nextPhase === "delivery") {
-      const result = await apiRequest<{ data: Array<{ status: string }> }>(`/deliverables/project/${projectId}`, { accessToken: accessToken ?? undefined });
-      const unresolved = result.data.filter((item) => item.status !== "approved").length;
+      let unresolved = 0;
+      try {
+        const result = await apiRequest<{ data: Array<{ status: string }> }>(`/deliverables/project/${projectId}`, { accessToken: accessToken ?? undefined });
+        unresolved = result.data.filter((item) => item.status !== "approved").length;
+      } catch (error) {
+        setPhaseError(error instanceof ApiError ? error.message : "Could not check project readiness for Delivery.");
+        return;
+      }
+      const incompleteTasks = Math.max(0, project.task_summary.total - project.task_summary.completed);
       const confirmed = await ui.confirm({
         title: "Move project to Delivery?",
-        message: unresolved > 0
-          ? `${unresolved} deliverable review${unresolved === 1 ? " is" : "s are"} unresolved. Client approval and change requests will close, but files and review history will stay visible.`
-          : "Client approval and change requests will close. Files and review history will remain visible.",
+        message: unresolved > 0 || incompleteTasks > 0
+          ? `${unresolved} deliverable review${unresolved === 1 ? " is" : "s are"} unresolved and ${incompleteTasks} task${incompleteTasks === 1 ? " is" : "s are"} incomplete. Client approval and change requests will close, but files and review history will stay visible.`
+          : "All recorded work is complete. Client approval and change requests will close; files and review history will remain visible.",
         confirmLabel: "Move to Delivery",
         cancelLabel: "Keep in review",
         tone: "warning"
       });
       if (!confirmed) return;
+      confirmUnresolvedReviews = true;
     }
-    phaseTransitionMutation.mutate(nextPhase);
+    phaseTransitionMutation.mutate({ nextPhase, confirmUnresolvedReviews });
+  };
+
+  const toggleTaskCreateAssignee = (userId: string) => {
+    setTaskAssigneeIds((current) => current.includes(userId)
+      ? current.filter((id) => id !== userId)
+      : [...current, userId]);
+  };
+
+  const addTaskCreateLabel = () => {
+    const name = taskNewLabelName.trim();
+    if (!name || taskLabels.some((label) => label.name.toLowerCase() === name.toLowerCase()) || taskLabels.length >= 12) return;
+    setTaskLabels((current) => [...current, { name, color: taskNewLabelColor }]);
+    setTaskNewLabelName("");
   };
 
   return (
@@ -937,37 +1052,37 @@ export function ProjectDetailPage() {
       <div className="tab-strip">
         <button
           className={activeTab === "overview" ? "tab-button active" : "tab-button"}
-          onClick={() => setActiveTab("overview")}
+          onClick={() => selectTab("overview")}
         >
           Overview
         </button>
         <button
           className={activeTab === "tasks" ? "tab-button active" : "tab-button"}
-          onClick={() => setActiveTab("tasks")}
+          onClick={() => selectTab("tasks")}
         >
           Task board ({tasksQuery.data?.meta.total ?? 0})
         </button>
         <button
           className={activeTab === "deliverables" ? "tab-button active" : "tab-button"}
-          onClick={() => setActiveTab("deliverables")}
+          onClick={() => selectTab("deliverables")}
         >
           Deliverables
         </button>
         <button
           className={activeTab === "files" ? "tab-button active" : "tab-button"}
-          onClick={() => setActiveTab("files")}
+          onClick={() => selectTab("files")}
         >
           Files ({filesQuery.data?.meta.total ?? 0})
         </button>
         <button
           className={activeTab === "activity" ? "tab-button active" : "tab-button"}
-          onClick={() => setActiveTab("activity")}
+          onClick={() => selectTab("activity")}
         >
           Activity ({activityQuery.data?.data.length ?? 0})
         </button>
         <button
           className={activeTab === "team" ? "tab-button active" : "tab-button"}
-          onClick={() => setActiveTab("team")}
+          onClick={() => selectTab("team")}
         >
           Team ({teamQuery.data?.data.length ?? 0})
         </button>
@@ -991,21 +1106,30 @@ export function ProjectDetailPage() {
               <h2>Task board</h2>
               <p className="muted">Move tasks through the five delivery phases.</p>
             </div>
-            {canWriteTask ? <Button variant="primary" icon={<Plus size={16} />} onClick={() => setTaskCreateOpen(true)}>New task</Button> : <p className="muted">You have read-only task access.</p>}
+            {canWriteTask ? <Button variant="primary" icon={<Plus size={16} />} onClick={() => { setFormError(null); setPhase(project.current_phase as TaskPhase); setTaskCreateOpen(true); }}>New task</Button> : <p className="muted">You have read-only task access.</p>}
           </div>
 
           {selectedTaskIds.length > 0 ? <div className="selection-toolbar">
             <strong>{selectedTaskIds.length} selected</strong>
             <select
               value={bulkTaskAction}
-              onChange={(event) => setBulkTaskAction(event.target.value as "" | "start" | "complete" | "delete")}
+              aria-label="Bulk task action"
+              onChange={(event) => { setBulkTaskAction(event.target.value as typeof bulkTaskAction); setBulkError(null); }}
               disabled={!canWriteTask}
             >
               <option value="">Bulk action</option>
               <option value="start">Start selected</option>
               <option value="complete">Complete selected</option>
+              <option value="assign">Assign to one person</option>
+              <option value="phase">Move to phase</option>
+              <option value="priority">Set priority</option>
+              <option value="label">Add label</option>
               <option value="delete">Delete selected</option>
             </select>
+            {bulkTaskAction === "assign" ? <select aria-label="Assign selected tasks" value={bulkAssigneeId} onChange={(event) => setBulkAssigneeId(event.target.value)}><option value="">Choose team member</option>{assignableProjectMembers.map((member) => <option key={member.user_id} value={member.user_id}>{member.user_name}</option>)}</select> : null}
+            {bulkTaskAction === "phase" ? <select aria-label="Move selected tasks to phase" value={bulkPhase} onChange={(event) => setBulkPhase(event.target.value as TaskPhase)}>{taskPhases.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}</select> : null}
+            {bulkTaskAction === "priority" ? <select aria-label="Set selected task priority" value={bulkPriority} onChange={(event) => setBulkPriority(event.target.value as typeof bulkPriority)}><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="urgent">Urgent</option></select> : null}
+            {bulkTaskAction === "label" ? <><input aria-label="Label selected tasks" placeholder="Label name" maxLength={50} value={bulkLabelName} onChange={(event) => setBulkLabelName(event.target.value)} /><select aria-label="Bulk label color" value={bulkLabelColor} onChange={(event) => setBulkLabelColor(event.target.value as TaskLabelColor)}>{taskLabelColors.map((color) => <option key={color.id} value={color.id}>{color.label}</option>)}</select></> : null}
             <button
               type="button"
               className="ghost-button"
@@ -1015,29 +1139,127 @@ export function ProjectDetailPage() {
                 !bulkTaskAction ||
                 selectedTaskIds.length === 0 ||
                 bulkDeleteMutation.isPending ||
-                bulkStatusMutation.isPending
+                bulkStatusMutation.isPending ||
+                bulkUpdateMutation.isPending
               }
             >
               Apply
             </button>
             <Button variant="ghost" size="sm" onClick={() => setSelectedTaskIds([])}>Cancel</Button>
+            {bulkError ? <p className="error-text" role="alert">{bulkError}</p> : null}
           </div> : null}
 
           <Dialog
             open={taskCreateOpen}
-            onOpenChange={setTaskCreateOpen}
+            onOpenChange={(open) => open ? setTaskCreateOpen(true) : void requestCloseTaskCreate()}
             title="Create a task"
-            description="Add the task to the delivery phase where work should begin."
-            footer={<div className="inline-actions"><Button variant="ghost" onClick={() => setTaskCreateOpen(false)}>Cancel</Button><Button variant="primary" type="submit" form="create-project-task-form" icon={<Plus size={16} />} disabled={!title.trim() || createTaskMutation.isPending}>{createTaskMutation.isPending ? "Creating…" : "Create task"}</Button></div>}
+            description="Define the work, owners, timing, and output before it enters the board."
+            size="lg"
+            footer={<div className="inline-actions"><Button variant="ghost" onClick={() => void requestCloseTaskCreate()}>Cancel</Button><Button variant="primary" type="submit" form="create-project-task-form" icon={<Plus size={16} />} disabled={!taskCreateValid || createTaskMutation.isPending}>{createTaskMutation.isPending ? "Creating…" : "Create task"}</Button></div>}
           >
-            <form id="create-project-task-form" className="modal-form" onSubmit={(event) => { event.preventDefault(); if (title.trim()) createTaskMutation.mutate({ title: title.trim(), phase }); }}>
+            <form id="create-project-task-form" className="modal-form" onSubmit={(event) => {
+              event.preventDefault();
+              if (!taskCreateValid) return;
+              const deliverable = taskDeliverableMode === "existing"
+                ? { mode: "existing" as const, deliverableId: taskDeliverableId }
+                : taskDeliverableMode === "new"
+                  ? { mode: "new" as const, title: taskDeliverableTitle.trim() }
+                  : undefined;
+              createTaskMutation.mutate({
+                title: title.trim(),
+                description: taskDescription.trim() || null,
+                phase,
+                priority: taskPriority,
+                dueDate: taskDueDate || null,
+                assigneeIds: taskAssigneeIds,
+                labels: taskLabels,
+                deliverableRequired: taskDeliverableRequired || Boolean(deliverable),
+                deliverable
+              });
+            }}>
               <label className="field"><span>Task title</span><input autoFocus placeholder="e.g. Prepare campaign storyboard" value={title} onChange={(event) => setTitle(event.target.value)} /></label>
-              <label className="field"><span>Starting phase</span><select value={phase} onChange={(event) => setPhase(event.target.value as TaskPhase)}>
-                {taskPhases.map((phaseOption) => <option key={phaseOption.id} value={phaseOption.id}>{phaseOption.label}</option>)}
-              </select></label>
-              {formError ? <p className="error-text">{formError}</p> : null}
+              <label className="field"><span>Description <small>Optional</small></span><textarea rows={3} placeholder="Add context, acceptance criteria, or links the team needs." value={taskDescription} onChange={(event) => setTaskDescription(event.target.value)} /></label>
+              <div className="modal-form-row">
+                <label className="field"><span>Starting phase</span><select value={phase} onChange={(event) => setPhase(event.target.value as TaskPhase)}>
+                  {taskPhases.map((phaseOption) => <option key={phaseOption.id} value={phaseOption.id}>{phaseOption.label}</option>)}
+                </select><small>Defaults to the project’s current phase.</small></label>
+                <label className="field"><span>Priority</span><select value={taskPriority} onChange={(event) => setTaskPriority(event.target.value as typeof taskPriority)}>
+                  <option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="urgent">Urgent</option>
+                </select></label>
+              </div>
+              <label className="field"><span>Due date <small>Optional</small></span><input type="date" value={taskDueDate} onChange={(event) => setTaskDueDate(event.target.value)} /></label>
+
+              <div className="field task-assignee-field">
+                <span>Assignees <small>{taskAssigneeIds.length ? `${taskAssigneeIds.length} selected` : "Optional"}</small></span>
+                <div className="task-assignee-options task-create-assignee-options" role="group" aria-label="Choose task assignees">
+                  {assignableProjectMembers.map((member) => (
+                    <label key={member.user_id} className="task-assignee-option">
+                      <input type="checkbox" checked={taskAssigneeIds.includes(member.user_id)} onChange={() => toggleTaskCreateAssignee(member.user_id)} />
+                      <span className="avatar avatar-fallback">{member.user_name.slice(0, 1).toUpperCase()}</span>
+                      <span><strong>{member.user_name}</strong><small>{formatLabel(member.role)} · {member.open_task_count} open task{member.open_task_count === "1" ? "" : "s"}</small></span>
+                    </label>
+                  ))}
+                  {!teamQuery.isLoading && assignableProjectMembers.length === 0 ? <p className="muted">Add staff to this project’s Team before assigning the task.</p> : null}
+                </div>
+              </div>
+
+              <div className="field task-label-field">
+                <span>Labels <small>Optional</small></span>
+                <div className="task-label-editor">
+                  <div className="task-label-selection">
+                    {taskLabels.length ? taskLabels.map((label) => (
+                      <span key={label.name} className={`task-label task-label-${label.color}`}>
+                        {label.name}
+                        <button type="button" aria-label={`Remove ${label.name} label`} onClick={() => setTaskLabels((current) => current.filter((item) => item.name !== label.name))}>×</button>
+                      </span>
+                    )) : <span className="task-picker-placeholder">No custom labels</span>}
+                  </div>
+                  <div className="task-label-create">
+                    <input aria-label="New task label" maxLength={50} placeholder="Add a label" value={taskNewLabelName} onChange={(event) => setTaskNewLabelName(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addTaskCreateLabel(); } }} />
+                    <select aria-label="New task label color" value={taskNewLabelColor} onChange={(event) => setTaskNewLabelColor(event.target.value as TaskLabelColor)}>{taskLabelColors.map((color) => <option key={color.id} value={color.id}>{color.label}</option>)}</select>
+                    <Button variant="secondary" size="sm" type="button" disabled={!taskNewLabelName.trim() || taskLabels.length >= 12} onClick={addTaskCreateLabel}>Add label</Button>
+                  </div>
+                </div>
+              </div>
+              <div className="task-deliverable-create-option">
+                <div className="task-deliverable-option-heading">
+                  <FileCheck2 size={17} aria-hidden="true" />
+                  <div><strong>Deliverable <span>Optional</span></strong><p>Connect the work output now, or add it later from task details.</p></div>
+                </div>
+                <label className="field"><span>How should this task connect?</span><select value={taskDeliverableMode} onChange={(event) => {
+                  setTaskDeliverableMode(event.target.value as "none" | "existing" | "new");
+                  setTaskDeliverableId("");
+                  setTaskDeliverableTitle("");
+                  if (event.target.value !== "none") setTaskDeliverableRequired(true);
+                }}>
+                  <option value="none">No deliverable yet</option>
+                  <option value="existing">Link an existing deliverable</option>
+                  <option value="new">Create a deliverable placeholder</option>
+                </select></label>
+                {taskDeliverableMode === "existing" ? (
+                  <label className="field"><span>Existing deliverable</span><select value={taskDeliverableId} onChange={(event) => setTaskDeliverableId(event.target.value)}>
+                    <option value="">Select a deliverable</option>
+                    {availableDeliverables.map((deliverable) => <option key={deliverable.id} value={deliverable.id}>{deliverable.title} · {formatLabel(deliverable.status)}</option>)}
+                  </select>{!deliverablesQuery.isLoading && !availableDeliverables.length ? <small>No deliverables exist yet. Choose “Create a deliverable placeholder” instead.</small> : null}</label>
+                ) : null}
+                {taskDeliverableMode === "new" ? (
+                  <label className="field"><span>Deliverable title</span><input placeholder="e.g. Final campaign storyboard" value={taskDeliverableTitle} onChange={(event) => setTaskDeliverableTitle(event.target.value)} /></label>
+                ) : null}
+                <label className="task-deliverable-requirement">
+                  <input type="checkbox" checked={taskDeliverableRequired} onChange={(event) => setTaskDeliverableRequired(event.target.checked)} />
+                  <span><strong>Require a deliverable for completion</strong><small>The task completes only when work is submitted for internal approval.</small></span>
+                </label>
+              </div>
+              {formError ? <p className="error-text" role="alert">{formError}</p> : null}
             </form>
           </Dialog>
+
+          <label className="mobile-task-phase-selector">
+            <span>Task phase</span>
+            <select value={mobileTaskPhase} onChange={(event) => setMobileTaskPhase(event.target.value as TaskPhase)}>
+              {taskPhases.map((phaseOption) => <option key={phaseOption.id} value={phaseOption.id}>{phaseOption.label} ({displayedTasks.filter((task) => task.phase === phaseOption.id).length})</option>)}
+            </select>
+          </label>
 
           {tasksQuery.isLoading ? (
             <div className="state-card card">Loading task board...</div>
@@ -1049,7 +1271,7 @@ export function ProjectDetailPage() {
               onDragCancel={() => setActiveTask(null)}
               onDragEnd={handleTaskDragEnd}
             >
-              <div className="task-kanban-board" aria-label={`${project.name} task board`}>
+              <div className="task-kanban-board" data-mobile-active-phase={mobileTaskPhase} aria-label={`${project.name} task board`}>
                 {taskPhases.map((phaseOption) => (
                   <TaskPhaseColumn
                     key={phaseOption.id}
@@ -1058,11 +1280,8 @@ export function ProjectDetailPage() {
                     canWrite={canWriteTask}
                     selectedTaskIds={selectedTaskIds}
                     onToggleSelected={toggleTaskSelection}
-                    onOpenTask={(taskId) => setSelectedTaskId(taskId)}
-                    onStatusChange={(taskId, status) => {
-                      setTaskActionState((previous) => ({ ...previous, [taskId]: "saving" }));
-                      statusMutation.mutate({ taskId, status });
-                    }}
+                    onOpenTask={openTaskDetails}
+                    onStatusChange={(taskId, status) => statusMutation.mutate({ taskId, status })}
                   />
                 ))}
               </div>
@@ -1075,24 +1294,14 @@ export function ProjectDetailPage() {
           <Dialog
             open={Boolean(selectedTask)}
             onOpenChange={(open) => {
-              if (!open) {
-                setSelectedTaskId(null);
-                setCommentBody("");
-                setAssigneePickerOpen(false);
-                setNewTaskLabelName("");
-              }
+              if (!open) void requestCloseTaskDetails();
             }}
             title={selectedTask?.title ?? "Task details"}
             description="Review the task, update its ownership and timing, or leave a comment."
             size="lg"
             footer={selectedTask ? (
               <div className="inline-actions">
-                <Button variant="ghost" onClick={() => {
-                  setSelectedTaskId(null);
-                  setCommentBody("");
-                  setAssigneePickerOpen(false);
-                  setNewTaskLabelName("");
-                }}>Close</Button>
+                <Button variant="ghost" onClick={() => void requestCloseTaskDetails()}>Close</Button>
                 {canWriteTask ? (
                   <Button variant="primary" type="submit" form="edit-task-details-form" disabled={updateTaskMutation.isPending}>
                     {updateTaskMutation.isPending ? "Saving…" : "Save changes"}
@@ -1116,13 +1325,13 @@ export function ProjectDetailPage() {
                   className="task-detail-form"
                   onSubmit={(event) => {
                     event.preventDefault();
-                    setTaskActionState((previous) => ({ ...previous, [selectedTask.id]: "saving" }));
                     updateTaskMutation.mutate({
                       taskId: selectedTask.id,
                       assigneeIds: selectedTaskDraft.assigneeIds,
                       dueDate: selectedTaskDraft.dueDate,
                       priority: selectedTaskDraft.priority,
-                      labels: selectedTaskDraft.labels
+                      labels: selectedTaskDraft.labels,
+                      deliverableRequired: selectedTaskDraft.deliverableRequired
                     });
                   }}
                 >
@@ -1131,7 +1340,11 @@ export function ProjectDetailPage() {
                     <div className="task-assignee-picker">
                       <div className="task-assignee-selection">
                         {selectedTaskDraft.assigneeIds.length ? selectedTaskDraft.assigneeIds.map((userId) => {
-                          const user = usersQuery.data?.data.find((candidate) => candidate.id === userId);
+                          const member = assignableProjectMembers.find((candidate) => candidate.user_id === userId);
+                          const existingAssignee = selectedTask.assignees.find((candidate) => candidate.id === userId);
+                          const user = member
+                            ? { id: member.user_id, name: member.user_name }
+                            : existingAssignee;
                           return user ? (
                             <span key={user.id} className="assignee-chip">
                               <span className="avatar avatar-fallback">{user.name.slice(0, 1).toUpperCase()}</span>
@@ -1144,13 +1357,14 @@ export function ProjectDetailPage() {
                       </div>
                       {assigneePickerOpen && canWriteTask ? (
                         <div className="task-assignee-options" role="group" aria-label="Choose task assignees">
-                          {usersQuery.data?.data.map((user) => (
-                            <label key={user.id} className="task-assignee-option">
-                              <input type="checkbox" checked={selectedTaskDraft.assigneeIds.includes(user.id)} onChange={() => toggleTaskAssignee(user.id)} />
-                              <span className="avatar avatar-fallback">{user.name.slice(0, 1).toUpperCase()}</span>
-                              <span><strong>{user.name}</strong><small>{user.email}</small></span>
+                          {assignableProjectMembers.map((member) => (
+                            <label key={member.user_id} className="task-assignee-option">
+                              <input type="checkbox" checked={selectedTaskDraft.assigneeIds.includes(member.user_id)} onChange={() => toggleTaskAssignee(member.user_id)} />
+                              <span className="avatar avatar-fallback">{member.user_name.slice(0, 1).toUpperCase()}</span>
+                              <span><strong>{member.user_name}</strong><small>{formatLabel(member.role)} · {member.user_email}</small></span>
                             </label>
                           ))}
+                          {!teamQuery.isLoading && assignableProjectMembers.length === 0 ? <p className="muted">Add staff to the project Team before assigning this task.</p> : null}
                         </div>
                       ) : null}
                     </div>
@@ -1166,6 +1380,18 @@ export function ProjectDetailPage() {
                     onChange={(event) => setTaskDrafts((previous) => ({ ...previous, [selectedTask.id]: { ...selectedTaskDraft, dueDate: event.target.value } }))}
                     disabled={!canWriteTask}
                   /></label>
+                  <label className="task-deliverable-requirement">
+                    <input
+                      type="checkbox"
+                      checked={selectedTaskDraft.deliverableRequired}
+                      onChange={(event) => setTaskDrafts((previous) => ({
+                        ...previous,
+                        [selectedTask.id]: { ...selectedTaskDraft, deliverableRequired: event.target.checked }
+                      }))}
+                      disabled={!canWriteTask}
+                    />
+                    <span><strong>Deliverable required</strong><small>Completion is recorded when a linked deliverable enters internal review.</small></span>
+                  </label>
                   <div className="field task-label-field">
                     <span>Labels <small>Use labels to classify and find related work</small></span>
                     <div className="task-label-editor">
@@ -1188,7 +1414,32 @@ export function ProjectDetailPage() {
                       ) : null}
                     </div>
                   </div>
+                  {taskDetailError ? <p className="error-text" role="alert">{taskDetailError}</p> : null}
                 </form>
+
+                <section className="task-detail-deliverables" aria-labelledby="task-deliverables-title">
+                  <div className="task-detail-deliverables-heading">
+                    <div className="task-detail-section-title">
+                      <FileCheck2 size={17} aria-hidden="true" />
+                      <div><h3 id="task-deliverables-title">Deliverables</h3><p>The submitted output that proves this task is complete.</p></div>
+                    </div>
+                    {canWriteTask ? <Button variant="secondary" size="sm" icon={<Plus size={14} />} onClick={() => setTaskDeliverableDialogOpen(true)}>Add deliverable</Button> : null}
+                  </div>
+                  {selectedTask.deliverables.length ? (
+                    <div className="task-deliverable-list">
+                      {selectedTask.deliverables.map((deliverable) => (
+                        <article key={deliverable.id} className="task-deliverable-row">
+                          <div className="deliverable-icon"><FileCheck2 size={16} aria-hidden="true" /></div>
+                          <div><strong>{deliverable.title}</strong><p>{formatLabel(deliverable.status)}{deliverable.latest_version_number ? ` · Version ${deliverable.latest_version_number}` : " · Awaiting first version"}</p></div>
+                          <Button variant="ghost" size="sm" onClick={() => void openDeliverablesFromTask()}>Open</Button>
+                        </article>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="task-deliverable-empty"><p>No deliverable connected yet.</p><span>You can link existing work or create a placeholder without leaving this task.</span></div>
+                  )}
+                  <p className="task-completion-note">The task completes automatically when a linked deliverable version is submitted for internal approval.</p>
+                </section>
 
                 <section className="task-detail-comments" aria-labelledby="task-comments-title">
                   <div className="task-detail-comments-heading">
@@ -1242,6 +1493,39 @@ export function ProjectDetailPage() {
                 </section>
               </div>
             ) : null}
+          </Dialog>
+
+          <Dialog
+            open={taskDeliverableDialogOpen}
+            onOpenChange={(open) => {
+              if (open) setTaskDeliverableDialogOpen(true);
+              else void requestCloseTaskDeliverableDialog();
+            }}
+            title="Add a deliverable"
+            description={`Connect the output that will complete ${selectedTask?.title ?? "this task"}.`}
+            footer={<div className="inline-actions"><Button variant="ghost" onClick={() => void requestCloseTaskDeliverableDialog()}>Cancel</Button><Button variant="primary" type="submit" form="attach-task-deliverable-form" icon={<FileCheck2 size={16} />} disabled={!selectedTask || attachTaskDeliverableMutation.isPending || (detailDeliverableMode === "existing" ? !detailDeliverableId : !detailDeliverableTitle.trim())}>{attachTaskDeliverableMutation.isPending ? "Connecting…" : "Connect deliverable"}</Button></div>}
+          >
+            <form id="attach-task-deliverable-form" className="modal-form" onSubmit={(event) => {
+              event.preventDefault();
+              if (!selectedTask) return;
+              const selection: DeliverableSelection = detailDeliverableMode === "existing"
+                ? { mode: "existing", deliverableId: detailDeliverableId }
+                : { mode: "new", title: detailDeliverableTitle.trim() };
+              attachTaskDeliverableMutation.mutate({ taskId: selectedTask.id, selection });
+            }}>
+              <label className="field"><span>Connection</span><select value={detailDeliverableMode} onChange={(event) => {
+                setDetailDeliverableMode(event.target.value as "existing" | "new");
+                setDetailDeliverableId("");
+                setDetailDeliverableTitle("");
+              }}><option value="existing">Link an existing deliverable</option><option value="new">Create a deliverable placeholder</option></select></label>
+              {detailDeliverableMode === "existing" ? (
+                <label className="field"><span>Existing deliverable</span><select value={detailDeliverableId} onChange={(event) => setDetailDeliverableId(event.target.value)}><option value="">Select a deliverable</option>{unlinkedDeliverables.map((deliverable) => <option key={deliverable.id} value={deliverable.id}>{deliverable.title} · {formatLabel(deliverable.status)}</option>)}</select>{!deliverablesQuery.isLoading && !unlinkedDeliverables.length ? <small>Every current deliverable is already linked. Create a new placeholder instead.</small> : null}</label>
+              ) : (
+                <label className="field"><span>Deliverable title</span><input autoFocus placeholder="e.g. Approved social media artwork" value={detailDeliverableTitle} onChange={(event) => setDetailDeliverableTitle(event.target.value)} /></label>
+              )}
+              <p className="task-completion-note">Creating a placeholder does not complete the task. Submitting its first version for internal approval does.</p>
+              {detailDeliverableError ? <p className="error-text" role="alert">{detailDeliverableError}</p> : null}
+            </form>
           </Dialog>
         </div>
       ) : activeTab === "files" ? (
@@ -1366,6 +1650,7 @@ export function ProjectDetailPage() {
         <ProjectDeliverablesPanel
           projectId={projectId ?? ""}
           canWrite={canWriteFile}
+          canSupervise={canUpdateProject}
           deliveryLocked={project.current_phase === "delivery"}
         />
       ) : activeTab === "activity" ? (
@@ -1399,34 +1684,35 @@ export function ProjectDetailPage() {
               <h2>Team</h2>
               <p className="muted">Manage the staff members assigned to this project.</p>
             </div>
-            {canManageTeam ? <Button variant="primary" icon={<UserPlus size={16} />} onClick={() => setTeamMemberDialogOpen(true)}>Add team member</Button> : <p className="muted">Only owners and managers can manage this team.</p>}
+            {canManageTeam ? <Button variant="primary" icon={<UserPlus size={16} />} onClick={() => { setTeamFormError(null); setTeamMemberDialogOpen(true); }}>Add team member</Button> : <p className="muted">Only owners and managers can manage this team.</p>}
           </div>
 
           <Dialog
             open={teamMemberDialogOpen}
-            onOpenChange={setTeamMemberDialogOpen}
+            onOpenChange={(open) => open ? setTeamMemberDialogOpen(true) : void requestCloseTeamMemberDialog()}
             title="Add a team member"
             description="Choose a staff member and the access level they should have on this project."
-            footer={<div className="inline-actions"><Button variant="ghost" onClick={() => setTeamMemberDialogOpen(false)}>Cancel</Button><Button variant="primary" type="submit" form="add-project-team-member-form" icon={<UserPlus size={16} />} disabled={!teamUserId || addTeamMemberMutation.isPending}>{addTeamMemberMutation.isPending ? "Adding…" : "Add member"}</Button></div>}
+            footer={<div className="inline-actions"><Button variant="ghost" onClick={() => void requestCloseTeamMemberDialog()}>Cancel</Button><Button variant="primary" type="submit" form="add-project-team-member-form" icon={<UserPlus size={16} />} disabled={!teamUserId || addTeamMemberMutation.isPending}>{addTeamMemberMutation.isPending ? "Adding…" : "Add member"}</Button></div>}
           >
             <form id="add-project-team-member-form" className="modal-form" onSubmit={(event) => { event.preventDefault(); if (teamUserId) addTeamMemberMutation.mutate({ userId: teamUserId, role: teamRole }); }}>
               <label className="field"><span>Staff member</span><select autoFocus value={teamUserId} onChange={(event) => setTeamUserId(event.target.value)} disabled={usersQuery.isLoading}>
                 <option value="">Select user</option>
-                {usersQuery.data?.data.map((user) => (
+                {availableTeamUsers.map((user) => (
                   <option key={user.id} value={user.id}>
                     {user.name} ({user.email})
                   </option>
                 ))}
-              </select></label>
+              </select>{!usersQuery.isLoading && availableTeamUsers.length === 0 ? <small>Every active staff member is already on this project.</small> : null}</label>
               <label className="field"><span>Project role</span><select value={teamRole} onChange={(event) => setTeamRole(event.target.value as "manager" | "member" | "viewer")}>
-                <option value="manager">Manager — manage work and team</option>
+                <option value="manager">Supervisor / project manager — approve work and manage team</option>
                 <option value="member">Member — create and update work</option>
                 <option value="viewer">Viewer — read-only access</option>
               </select></label>
-              {teamFormError ? <p className="error-text">{teamFormError}</p> : null}
+              {teamFormError ? <p className="error-text" role="alert">{teamFormError}</p> : null}
             </form>
           </Dialog>
 
+          {teamActionError ? <p className="board-error" role="alert">{teamActionError}</p> : null}
           <div className="card table-wrap">
             {teamQuery.isLoading ? (
               <p>Loading team...</p>
@@ -1441,6 +1727,7 @@ export function ProjectDetailPage() {
                     <th>Name</th>
                     <th>Email</th>
                     <th>Role</th>
+                    <th>Workload</th>
                     <th>Added</th>
                     <th>Actions</th>
                   </tr>
@@ -1450,15 +1737,39 @@ export function ProjectDetailPage() {
                     <tr key={member.user_id}>
                       <td>{member.user_name}</td>
                       <td>{member.user_email}</td>
-                      <td>{formatLabel(member.role)}</td>
+                      <td>
+                        {member.role === "owner" ? (
+                          <span className="role-badge role-owner">Project owner</span>
+                        ) : canManageTeam ? (
+                          <select
+                            className="team-role-select"
+                            aria-label={`Project role for ${member.user_name}`}
+                            title={member.role === "manager" && supervisorCount <= 1 ? "A project must retain at least one supervisor." : "Change project role"}
+                            value={member.role}
+                            disabled={updateTeamRoleMutation.isPending || (member.role === "manager" && supervisorCount <= 1)}
+                            onChange={(event) => updateTeamRoleMutation.mutate({ userId: member.user_id, role: event.target.value as "manager" | "member" | "viewer" })}
+                          >
+                            <option value="manager">Supervisor / manager</option>
+                            <option value="member">Member</option>
+                            <option value="viewer">Viewer</option>
+                          </select>
+                        ) : <span className="role-badge">{formatLabel(member.role)}</span>}
+                      </td>
+                      <td>
+                        <div className="team-workload" aria-label={`${member.open_task_count} open tasks, ${member.overdue_task_count} overdue`}>
+                          <strong>{member.open_task_count}</strong><span>open</span>
+                          {Number(member.overdue_task_count) > 0 ? <span className="team-workload-overdue">{member.overdue_task_count} overdue</span> : null}
+                        </div>
+                      </td>
                       <td>{new Date(member.created_at).toLocaleString()}</td>
                       <td>
-                        {canManageTeam ? (
+                        {canManageTeam && member.role !== "owner" ? (
                           <button
                             type="button"
                             className="ghost-button"
                             onClick={() => handleRemoveTeamMember(member)}
-                            disabled={removeTeamMemberMutation.isPending}
+                            title={Number(member.assigned_task_count) > 0 ? "Reassign this member’s tasks before removing them." : member.role === "manager" && supervisorCount <= 1 ? "A project must retain at least one supervisor." : "Remove from project"}
+                            disabled={removeTeamMemberMutation.isPending || Number(member.assigned_task_count) > 0 || (member.role === "manager" && supervisorCount <= 1)}
                           >
                             Remove
                           </button>

@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { createReadStream } from "node:fs";
+import { mkdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { env } from "../config/env.js";
 import type { StorageProvider } from "./storage-provider.js";
@@ -21,7 +22,17 @@ function resolveWithinRoot(objectKey: string) {
   return resolved;
 }
 
-export const localStorageProvider: StorageProvider = {
+async function checksumFile(sourcePath: string) {
+  return new Promise<string>((resolve, reject) => {
+    const hash = createHash("sha256");
+    const stream = createReadStream(sourcePath);
+    stream.on("data", (chunk) => hash.update(chunk));
+    stream.on("error", reject);
+    stream.on("end", () => resolve(hash.digest("hex")));
+  });
+}
+
+export const storageProvider: StorageProvider = {
   async save(input) {
     await mkdir(env.LOCAL_UPLOAD_DIR, { recursive: true });
     const objectKey = `${randomUUID()}${safeExtension(input.fileName)}`;
@@ -35,6 +46,23 @@ export const localStorageProvider: StorageProvider = {
     };
   },
 
+  async saveFromPath(input) {
+    await mkdir(env.LOCAL_UPLOAD_DIR, { recursive: true });
+    const objectKey = `${randomUUID()}${safeExtension(input.fileName)}`;
+    const target = resolveWithinRoot(objectKey);
+    const [checksumSha256, sourceStat] = await Promise.all([
+      checksumFile(input.sourcePath),
+      stat(input.sourcePath)
+    ]);
+    await rename(input.sourcePath, target);
+
+    return {
+      objectKey,
+      checksumSha256,
+      size: sourceStat.size
+    };
+  },
+
   async resolve(objectKey) {
     return resolveWithinRoot(objectKey);
   },
@@ -43,5 +71,3 @@ export const localStorageProvider: StorageProvider = {
     await rm(resolveWithinRoot(objectKey), { force: true });
   }
 };
-
-export const storageProvider = localStorageProvider;

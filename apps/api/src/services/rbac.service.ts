@@ -7,7 +7,8 @@ export type ProjectPermission =
   | "project:delete"
   | "team:manage"
   | "task:write"
-  | "file:write";
+  | "file:write"
+  | "deliverable:supervise";
 
 type ProjectAccessRow = {
   created_by: string;
@@ -15,8 +16,8 @@ type ProjectAccessRow = {
 };
 
 const PERMISSION_MATRIX: Record<ProjectRole, ProjectPermission[]> = {
-  owner: ["project:view", "project:update", "project:delete", "team:manage", "task:write", "file:write"],
-  manager: ["project:view", "project:update", "team:manage", "task:write", "file:write"],
+  owner: ["project:view", "project:update", "project:delete", "team:manage", "task:write", "file:write", "deliverable:supervise"],
+  manager: ["project:view", "project:update", "team:manage", "task:write", "file:write", "deliverable:supervise"],
   member: ["project:view", "task:write", "file:write"],
   viewer: ["project:view"]
 };
@@ -31,12 +32,17 @@ function normalizeTeamRole(role: string): ProjectRole {
   return "member";
 }
 
-export async function getProjectRoleForUser(projectId: string, userId: string): Promise<ProjectRole | null> {
+async function getProjectRoleForUser(projectId: string, userId: string): Promise<ProjectRole | null> {
   const result = await pool.query<ProjectAccessRow>(
     `SELECT
        p.created_by,
        pt.role AS team_role
      FROM projects p
+     INNER JOIN users actor
+       ON actor.id = $2
+      AND actor.account_type = 'staff'
+      AND actor.is_active = TRUE
+      AND actor.deleted_at IS NULL
      LEFT JOIN project_team pt
        ON pt.project_id = p.id
       AND pt.user_id = $2

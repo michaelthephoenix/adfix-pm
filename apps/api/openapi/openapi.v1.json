@@ -91,6 +91,1291 @@
             "nullable": true
           }
         }
+      },
+      "ProjectSetupRequest": {
+        "type": "object",
+        "required": [
+          "name",
+          "startDate",
+          "deadline",
+          "team"
+        ],
+        "properties": {
+          "clientId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "newClient": {
+            "type": "object",
+            "required": [
+              "name"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 255
+              },
+              "company": {
+                "type": "string",
+                "nullable": true,
+                "maxLength": 255
+              }
+            }
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          },
+          "description": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 10000
+          },
+          "priority": {
+            "type": "string",
+            "enum": [
+              "low",
+              "medium",
+              "high",
+              "urgent"
+            ]
+          },
+          "budget": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 32
+          },
+          "startDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "deadline": {
+            "type": "string",
+            "format": "date"
+          },
+          "team": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "type": "object",
+              "required": [
+                "userId",
+                "role"
+              ],
+              "properties": {
+                "userId": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "role": {
+                  "type": "string",
+                  "enum": [
+                    "manager",
+                    "member",
+                    "viewer"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "description": "Exactly one of clientId or newClient is required. All records are committed atomically."
+      },
+      "ProjectPhaseTransitionRequest": {
+        "type": "object",
+        "required": [
+          "phase"
+        ],
+        "properties": {
+          "phase": {
+            "type": "string",
+            "enum": [
+              "client_acquisition",
+              "strategy_planning",
+              "production",
+              "post_production",
+              "delivery"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 1000
+          },
+          "clientUpdate": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 2000
+          },
+          "confirmUnresolvedReviews": {
+            "type": "boolean",
+            "default": false
+          }
+        }
+      },
+      "JsonObject": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "JsonObjectResponse": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "User": {
+        "type": "object",
+        "required": [
+          "id",
+          "email",
+          "name",
+          "isAdmin",
+          "accountType"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "name": {
+            "type": "string"
+          },
+          "isAdmin": {
+            "type": "boolean"
+          },
+          "accountType": {
+            "type": "string",
+            "enum": [
+              "staff",
+              "client"
+            ]
+          },
+          "avatarUrl": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "AuthResponse": {
+        "type": "object",
+        "required": [
+          "accessToken",
+          "user"
+        ],
+        "properties": {
+          "accessToken": {
+            "type": "string"
+          },
+          "user": {
+            "$ref": "#/components/schemas/User"
+          }
+        }
+      },
+      "CurrentUserResponse": {
+        "type": "object",
+        "required": [
+          "user"
+        ],
+        "properties": {
+          "user": {
+            "$ref": "#/components/schemas/User"
+          }
+        }
+      },
+      "HealthResponse": {
+        "type": "object",
+        "required": [
+          "status",
+          "service",
+          "timestamp"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok"
+            ]
+          },
+          "service": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ReadinessResponse": {
+        "type": "object",
+        "required": [
+          "status",
+          "service",
+          "checks",
+          "timestamp"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "degraded"
+            ]
+          },
+          "service": {
+            "type": "string"
+          },
+          "checks": {
+            "type": "object",
+            "required": [
+              "database",
+              "storage"
+            ],
+            "properties": {
+              "database": {
+                "type": "string",
+                "enum": [
+                  "ok",
+                  "error"
+                ]
+              },
+              "storage": {
+                "type": "string",
+                "enum": [
+                  "ok",
+                  "error"
+                ]
+              }
+            }
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "OpenApiDocument": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "DashboardAssignee": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "avatarUrl"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "avatarUrl": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "DashboardTask": {
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "priority",
+          "dueDate",
+          "projectId",
+          "projectName",
+          "clientName",
+          "assignees"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "title": {
+            "type": "string"
+          },
+          "priority": {
+            "type": "string",
+            "enum": [
+              "low",
+              "medium",
+              "high",
+              "urgent"
+            ]
+          },
+          "dueDate": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "projectId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "projectName": {
+            "type": "string"
+          },
+          "clientName": {
+            "type": "string"
+          },
+          "assignees": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DashboardAssignee"
+            }
+          }
+        }
+      },
+      "DashboardInternalReview": {
+        "type": "object",
+        "required": [
+          "versionId",
+          "deliverableId",
+          "deliverableTitle",
+          "projectId",
+          "projectName",
+          "clientName",
+          "versionNumber",
+          "submittedAt",
+          "submittedByName"
+        ],
+        "properties": {
+          "versionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "deliverableId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "deliverableTitle": {
+            "type": "string"
+          },
+          "projectId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "projectName": {
+            "type": "string"
+          },
+          "clientName": {
+            "type": "string"
+          },
+          "versionNumber": {
+            "type": "integer"
+          },
+          "submittedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "submittedByName": {
+            "type": "string"
+          }
+        }
+      },
+      "DashboardClientFeedback": {
+        "type": "object",
+        "required": [
+          "notificationId",
+          "type",
+          "title",
+          "message",
+          "createdAt",
+          "versionId",
+          "deliverableId",
+          "deliverableTitle",
+          "projectId",
+          "projectName",
+          "clientName"
+        ],
+        "properties": {
+          "notificationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "type": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "versionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "deliverableId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "deliverableTitle": {
+            "type": "string"
+          },
+          "projectId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "projectName": {
+            "type": "string"
+          },
+          "clientName": {
+            "type": "string"
+          }
+        }
+      },
+      "DashboardUnresolvedReview": {
+        "type": "object",
+        "required": [
+          "versionId",
+          "deliverableId",
+          "deliverableTitle",
+          "projectId",
+          "projectName",
+          "clientName",
+          "versionNumber",
+          "clientSubmittedAt"
+        ],
+        "properties": {
+          "versionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "deliverableId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "deliverableTitle": {
+            "type": "string"
+          },
+          "projectId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "projectName": {
+            "type": "string"
+          },
+          "clientName": {
+            "type": "string"
+          },
+          "versionNumber": {
+            "type": "integer"
+          },
+          "clientSubmittedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "DashboardWorkload": {
+        "type": "object",
+        "required": [
+          "userId",
+          "userName",
+          "avatarUrl",
+          "activeTasks",
+          "dueToday",
+          "overdueTasks",
+          "blockedTasks"
+        ],
+        "properties": {
+          "userId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "userName": {
+            "type": "string"
+          },
+          "avatarUrl": {
+            "type": "string",
+            "nullable": true
+          },
+          "activeTasks": {
+            "type": "integer"
+          },
+          "dueToday": {
+            "type": "integer"
+          },
+          "overdueTasks": {
+            "type": "integer"
+          },
+          "blockedTasks": {
+            "type": "integer"
+          }
+        }
+      },
+      "DashboardResponse": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "required": [
+              "projectsByPhase",
+              "overdueTasksCount",
+              "projectsCompletedThisMonth",
+              "projectsCompletedThisQuarter",
+              "attentionCounts",
+              "internalReviewsAwaitingDecision",
+              "clientFeedbackAwaitingResponse",
+              "dueTodayAssignments",
+              "blockedTasks",
+              "unresolvedClientReviews",
+              "workload"
+            ],
+            "properties": {
+              "projectsByPhase": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "phase",
+                    "count"
+                  ],
+                  "properties": {
+                    "phase": {
+                      "type": "string"
+                    },
+                    "count": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              },
+              "overdueTasksCount": {
+                "type": "integer"
+              },
+              "projectsCompletedThisMonth": {
+                "type": "integer"
+              },
+              "projectsCompletedThisQuarter": {
+                "type": "integer"
+              },
+              "attentionCounts": {
+                "type": "object",
+                "required": [
+                  "internalReviews",
+                  "clientFeedback",
+                  "dueToday",
+                  "blockedTasks",
+                  "unresolvedClientReviews"
+                ],
+                "properties": {
+                  "internalReviews": {
+                    "type": "integer"
+                  },
+                  "clientFeedback": {
+                    "type": "integer"
+                  },
+                  "dueToday": {
+                    "type": "integer"
+                  },
+                  "blockedTasks": {
+                    "type": "integer"
+                  },
+                  "unresolvedClientReviews": {
+                    "type": "integer"
+                  }
+                }
+              },
+              "internalReviewsAwaitingDecision": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/DashboardInternalReview"
+                }
+              },
+              "clientFeedbackAwaitingResponse": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/DashboardClientFeedback"
+                }
+              },
+              "dueTodayAssignments": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/DashboardTask"
+                }
+              },
+              "blockedTasks": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/DashboardTask"
+                }
+              },
+              "unresolvedClientReviews": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/DashboardUnresolvedReview"
+                }
+              },
+              "workload": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/DashboardWorkload"
+                }
+              }
+            }
+          }
+        }
+      },
+      "NotificationRecord": {
+        "type": "object",
+        "required": [
+          "id",
+          "user_id",
+          "project_id",
+          "task_id",
+          "type",
+          "title",
+          "message",
+          "metadata",
+          "is_read",
+          "read_at",
+          "action_required",
+          "action_status",
+          "resolved_at",
+          "resolution_reason",
+          "archived_at",
+          "created_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "user_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "project_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "task_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "type": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "is_read": {
+            "type": "boolean"
+          },
+          "read_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "action_required": {
+            "type": "boolean"
+          },
+          "action_status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "resolved",
+              "superseded"
+            ]
+          },
+          "resolved_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "resolution_reason": {
+            "type": "string",
+            "nullable": true
+          },
+          "archived_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "Notification": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/NotificationRecord"
+          },
+          {
+            "type": "object",
+            "required": [
+              "target_available"
+            ],
+            "properties": {
+              "target_available": {
+                "type": "boolean"
+              }
+            }
+          }
+        ]
+      },
+      "NotificationResponse": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/NotificationRecord"
+          }
+        }
+      },
+      "NullableNotificationResponse": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/NotificationRecord"
+              }
+            ],
+            "nullable": true
+          }
+        }
+      },
+      "NotificationsResponse": {
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Notification"
+            }
+          },
+          "meta": {
+            "type": "object",
+            "required": [
+              "page",
+              "pageSize",
+              "sortOrder",
+              "total",
+              "unreadCount",
+              "openActionCount"
+            ],
+            "properties": {
+              "page": {
+                "type": "integer"
+              },
+              "pageSize": {
+                "type": "integer"
+              },
+              "sortOrder": {
+                "type": "string",
+                "enum": [
+                  "asc",
+                  "desc"
+                ]
+              },
+              "total": {
+                "type": "integer"
+              },
+              "unreadCount": {
+                "type": "integer"
+              },
+              "openActionCount": {
+                "type": "integer"
+              }
+            }
+          }
+        }
+      },
+      "UpdatedCountResponse": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "required": [
+              "updatedCount"
+            ],
+            "properties": {
+              "updatedCount": {
+                "type": "integer"
+              }
+            }
+          }
+        }
+      },
+      "ClientReviewDecision": {
+        "type": "object",
+        "required": [
+          "id",
+          "decision",
+          "comment",
+          "reviewedAt",
+          "reviewerName"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "decision": {
+            "type": "string",
+            "enum": [
+              "approved",
+              "changes_requested"
+            ]
+          },
+          "comment": {
+            "type": "string",
+            "nullable": true
+          },
+          "reviewedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reviewerName": {
+            "type": "string"
+          }
+        }
+      },
+      "ClientReviewInboxItem": {
+        "type": "object",
+        "required": [
+          "versionId",
+          "deliverableId",
+          "deliverableTitle",
+          "deliverableDescription",
+          "deliverableStatus",
+          "versionNumber",
+          "submissionNote",
+          "clientSubmittedAt",
+          "file",
+          "project",
+          "client",
+          "clientRole",
+          "review",
+          "canReview"
+        ],
+        "properties": {
+          "versionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "deliverableId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "deliverableTitle": {
+            "type": "string"
+          },
+          "deliverableDescription": {
+            "type": "string",
+            "nullable": true
+          },
+          "deliverableStatus": {
+            "type": "string"
+          },
+          "versionNumber": {
+            "type": "integer"
+          },
+          "submissionNote": {
+            "type": "string",
+            "nullable": true
+          },
+          "clientSubmittedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "file": {
+            "type": "object",
+            "required": [
+              "id",
+              "name",
+              "size",
+              "mimeType",
+              "storageType",
+              "externalUrl"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "name": {
+                "type": "string"
+              },
+              "size": {
+                "type": "string"
+              },
+              "mimeType": {
+                "type": "string"
+              },
+              "storageType": {
+                "type": "string",
+                "enum": [
+                  "local",
+                  "s3",
+                  "google_drive",
+                  "dropbox",
+                  "onedrive",
+                  "external"
+                ]
+              },
+              "externalUrl": {
+                "type": "string",
+                "nullable": true
+              }
+            }
+          },
+          "project": {
+            "type": "object",
+            "required": [
+              "id",
+              "name",
+              "phase",
+              "deadline"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "name": {
+                "type": "string"
+              },
+              "phase": {
+                "type": "string"
+              },
+              "deadline": {
+                "type": "string",
+                "format": "date"
+              }
+            }
+          },
+          "client": {
+            "type": "object",
+            "required": [
+              "id",
+              "name"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "name": {
+                "type": "string"
+              }
+            }
+          },
+          "clientRole": {
+            "type": "string",
+            "enum": [
+              "reviewer",
+              "viewer"
+            ]
+          },
+          "review": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ClientReviewDecision"
+              }
+            ],
+            "nullable": true
+          },
+          "canReview": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ClientReviewInboxResponse": {
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ClientReviewInboxItem"
+            }
+          },
+          "meta": {
+            "type": "object",
+            "required": [
+              "status",
+              "sort",
+              "counts"
+            ],
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": [
+                  "pending",
+                  "reviewed",
+                  "history"
+                ]
+              },
+              "sort": {
+                "type": "string",
+                "enum": [
+                  "oldest",
+                  "newest",
+                  "deadline"
+                ]
+              },
+              "counts": {
+                "type": "object",
+                "required": [
+                  "pending",
+                  "reviewed",
+                  "history"
+                ],
+                "properties": {
+                  "pending": {
+                    "type": "integer"
+                  },
+                  "reviewed": {
+                    "type": "integer"
+                  },
+                  "history": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "GetClients200Response": {
+        "$ref": "#/components/schemas/JsonObjectResponse"
+      },
+      "PostClients201Response": {
+        "$ref": "#/components/schemas/JsonObjectResponse"
+      },
+      "GetClientsId200Response": {
+        "$ref": "#/components/schemas/JsonObjectResponse"
+      },
+      "PutClientsId200Response": {
+        "$ref": "#/components/schemas/JsonObjectResponse"
+      },
+      "GetProjects200Response": {
+        "$ref": "#/components/schemas/JsonObjectResponse"
+      },
+      "PostProjects201Response": {
+        "$ref": "#/components/schemas/JsonObjectResponse"
+      },
+      "GetClientsIdActivity200Response": {
+        "$ref": "#/components/schemas/JsonObjectResponse"
+      },
+      "PostProjectsSetup201Response": {
+        "$ref": "#/components/schemas/JsonObjectResponse"
+      },
+      "GetProjectsId200Response": {
+        "$ref": "#/components/schemas/JsonObjectResponse"
+      },
+      "PutProjectsId200Response": {
+        "$ref": "#/components/schemas/JsonObjectResponse"
+      },
+      "PatchProjectsIdPhase200Response": {
+        "$ref": "#/components/schemas/JsonObjectResponse"
+      },
+      "GetProjectsIdActivity200Response": {
+        "$ref": "#/components/schemas/JsonObjectResponse"
+      },
+      "GetProjectsIdTeam200Response": {
+        "$ref": "#/components/schemas/JsonObjectResponse"
+      },
+      "PostProjectsIdTeam201Response": {
+        "$ref": "#/components/schemas/JsonObjectResponse"
+      },
+      "PatchProjectsIdTeamUserId200Response": {
+        "$ref": "#/components/schemas/JsonObjectResponse"
+      },
+      "GetTasks200Response": {
+        "$ref": "#/components/schemas/JsonObjectResponse"
+      },
+      "PostTasks201Response": {
+        "$ref": "#/components/schemas/JsonObjectResponse"
+      },
+      "GetTasksId200Response": {
+        "$ref": "#/components/schemas/JsonObjectResponse"
+      },
+      "PutTasksId200Response": {
+        "$ref": "#/components/schemas/JsonObjectResponse"
+      },
+      "PatchTasksIdStatus200Response": {
+        "$ref": "#/components/schemas/JsonObjectResponse"
+      },
+      "PostTasksIdDeliverables201Response": {
+        "$ref": "#/components/schemas/JsonObjectResponse"
+      },
+      "GetTasksIdComments200Response": {
+        "$ref": "#/components/schemas/JsonObjectResponse"
+      },
+      "PostTasksIdComments201Response": {
+        "$ref": "#/components/schemas/JsonObjectResponse"
+      },
+      "PostTasksBulkStatus200Response": {
+        "$ref": "#/components/schemas/JsonObjectResponse"
+      },
+      "PostTasksBulkUpdate200Response": {
+        "$ref": "#/components/schemas/JsonObjectResponse"
+      },
+      "PostTasksBulkDelete200Response": {
+        "$ref": "#/components/schemas/JsonObjectResponse"
+      },
+      "GetFilesProjectProjectId200Response": {
+        "$ref": "#/components/schemas/JsonObjectResponse"
+      },
+      "PostFilesLink201Response": {
+        "$ref": "#/components/schemas/JsonObjectResponse"
+      },
+      "PostFilesUpload201Response": {
+        "$ref": "#/components/schemas/JsonObjectResponse"
+      },
+      "PostFilesUploadBinary201Response": {
+        "$ref": "#/components/schemas/JsonObjectResponse"
+      },
+      "PostFilesIdPreviewSession200Response": {
+        "$ref": "#/components/schemas/JsonObjectResponse"
+      },
+      "PostFilesUploadUrl200Response": {
+        "$ref": "#/components/schemas/JsonObjectResponse"
+      },
+      "PostFilesCompleteUpload201Response": {
+        "$ref": "#/components/schemas/JsonObjectResponse"
+      },
+      "GetFilesIdDownloadUrl200Response": {
+        "$ref": "#/components/schemas/JsonObjectResponse"
+      },
+      "GetAnalyticsProjects200Response": {
+        "$ref": "#/components/schemas/JsonObjectResponse"
+      },
+      "GetAnalyticsTeam200Response": {
+        "$ref": "#/components/schemas/JsonObjectResponse"
+      },
+      "GetAnalyticsTimeline200Response": {
+        "$ref": "#/components/schemas/JsonObjectResponse"
+      },
+      "GetSearch200Response": {
+        "$ref": "#/components/schemas/JsonObjectResponse"
+      },
+      "GetClientInvitations200Response": {
+        "$ref": "#/components/schemas/JsonObjectResponse"
+      },
+      "PostClientInvitations201Response": {
+        "$ref": "#/components/schemas/JsonObjectResponse"
+      },
+      "GetClientInvitationsClientClientId200Response": {
+        "$ref": "#/components/schemas/JsonObjectResponse"
+      },
+      "GetClientInvitationsTokenToken200Response": {
+        "$ref": "#/components/schemas/JsonObjectResponse"
+      },
+      "PostClientInvitationsTokenTokenAccept201Response": {
+        "$ref": "#/components/schemas/JsonObjectResponse"
+      },
+      "PostClientInvitationsTokenTokenAcceptExisting200Response": {
+        "$ref": "#/components/schemas/JsonObjectResponse"
+      },
+      "PostDeliverables201Response": {
+        "$ref": "#/components/schemas/JsonObjectResponse"
+      },
+      "GetDeliverablesProjectProjectId200Response": {
+        "$ref": "#/components/schemas/JsonObjectResponse"
+      },
+      "PostDeliverablesIdVersions201Response": {
+        "$ref": "#/components/schemas/JsonObjectResponse"
+      },
+      "PatchClientInvitationsMembershipsClientIdUserId200Response": {
+        "$ref": "#/components/schemas/JsonObjectResponse"
+      },
+      "PostDeliverablesVersionsVersionIdInternalReview201Response": {
+        "$ref": "#/components/schemas/JsonObjectResponse"
+      },
+      "PostDeliverablesVersionsVersionIdSubmitClient200Response": {
+        "$ref": "#/components/schemas/JsonObjectResponse"
+      },
+      "PostDeliverablesVersionsVersionIdWithdrawClient200Response": {
+        "$ref": "#/components/schemas/JsonObjectResponse"
+      },
+      "PostDeliverablesVersionsVersionIdMessages201Response": {
+        "$ref": "#/components/schemas/JsonObjectResponse"
+      },
+      "PostDeliverablesVersionsVersionIdForwardFeedback201Response": {
+        "$ref": "#/components/schemas/JsonObjectResponse"
+      },
+      "GetClientPortalProjects200Response": {
+        "$ref": "#/components/schemas/JsonObjectResponse"
+      },
+      "GetClientPortalProjectsProjectId200Response": {
+        "$ref": "#/components/schemas/JsonObjectResponse"
+      },
+      "PostClientPortalVersionsVersionIdReviews201Response": {
+        "$ref": "#/components/schemas/JsonObjectResponse"
+      },
+      "PostClientPortalVersionsVersionIdMessages201Response": {
+        "$ref": "#/components/schemas/JsonObjectResponse"
+      },
+      "GetUsers200Response": {
+        "$ref": "#/components/schemas/JsonObjectResponse"
+      },
+      "PostUsers201Response": {
+        "$ref": "#/components/schemas/JsonObjectResponse"
+      },
+      "PostUsersAdminPasswordReset200Response": {
+        "$ref": "#/components/schemas/JsonObjectResponse"
+      },
+      "GetUsersId200Response": {
+        "$ref": "#/components/schemas/JsonObjectResponse"
+      },
+      "PutUsersId200Response": {
+        "$ref": "#/components/schemas/JsonObjectResponse"
+      },
+      "GetUsersAuditLogs200Response": {
+        "$ref": "#/components/schemas/JsonObjectResponse"
+      },
+      "PatchUsersIdStatus200Response": {
+        "$ref": "#/components/schemas/JsonObjectResponse"
+      },
+      "PostUsersIdProjectRolesReset200Response": {
+        "$ref": "#/components/schemas/JsonObjectResponse"
       }
     },
     "parameters": {
@@ -102,6 +1387,17 @@
           "type": "string"
         },
         "description": "Optional request correlation ID."
+      },
+      "idempotencyKeyHeader": {
+        "in": "header",
+        "name": "idempotency-key",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255
+        },
+        "description": "Stable key used to safely retry a workflow mutation without creating duplicate work."
       }
     }
   },
@@ -114,7 +1410,14 @@
         "summary": "Liveness check",
         "responses": {
           "200": {
-            "description": "Service process is running"
+            "description": "Service process is running",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
           }
         }
       }
@@ -127,7 +1430,14 @@
         "summary": "Readiness check (database connectivity)",
         "responses": {
           "200": {
-            "description": "Ready to serve traffic"
+            "description": "Ready to serve traffic",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadinessResponse"
+                }
+              }
+            }
           },
           "503": {
             "description": "Not ready (database unavailable)"
@@ -143,7 +1453,14 @@
         "summary": "Docs landing page",
         "responses": {
           "200": {
-            "description": "Docs HTML page"
+            "description": "Docs HTML page",
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -156,7 +1473,14 @@
         "summary": "OpenAPI specification",
         "responses": {
           "200": {
-            "description": "OpenAPI JSON document"
+            "description": "OpenAPI JSON document",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenApiDocument"
+                }
+              }
+            }
           }
         }
       }
@@ -166,10 +1490,17 @@
         "tags": [
           "auth"
         ],
-        "summary": "Authenticate with email/password",
+        "summary": "Authenticate and set a secure refresh cookie",
         "responses": {
           "200": {
-            "description": "Login successful"
+            "description": "Login successful",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthResponse"
+                }
+              }
+            }
           },
           "400": {
             "description": "Invalid payload",
@@ -199,10 +1530,17 @@
         "tags": [
           "auth"
         ],
-        "summary": "Rotate refresh token and issue new auth tokens",
+        "summary": "Rotate the refresh cookie and issue an access token",
         "responses": {
           "200": {
-            "description": "Refresh successful"
+            "description": "Refresh successful",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthResponse"
+                }
+              }
+            }
           },
           "400": {
             "description": "Invalid payload",
@@ -223,6 +1561,9 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "A concurrent request already rotated this cookie; retry once"
           }
         }
       }
@@ -366,7 +1707,14 @@
         "summary": "Get current authenticated user",
         "responses": {
           "200": {
-            "description": "Current user"
+            "description": "Current user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurrentUserResponse"
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -434,7 +1782,14 @@
         "summary": "List clients",
         "responses": {
           "200": {
-            "description": "Clients list"
+            "description": "Clients list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetClients200Response"
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -500,7 +1855,14 @@
         "summary": "Create client",
         "responses": {
           "201": {
-            "description": "Client created"
+            "description": "Client created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostClients201Response"
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -568,7 +1930,14 @@
         "summary": "Get client by ID",
         "responses": {
           "200": {
-            "description": "Client detail"
+            "description": "Client detail",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetClientsId200Response"
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -634,7 +2003,14 @@
         "summary": "Update client",
         "responses": {
           "200": {
-            "description": "Client updated"
+            "description": "Client updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PutClientsId200Response"
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -768,7 +2144,14 @@
         "summary": "List projects (RBAC scoped)",
         "responses": {
           "200": {
-            "description": "Projects list"
+            "description": "Projects list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetProjects200Response"
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -834,7 +2217,14 @@
         "summary": "Create project",
         "responses": {
           "201": {
-            "description": "Project created"
+            "description": "Project created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostProjects201Response"
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -889,6 +2279,176 @@
         }
       }
     },
+    "/clients/{id}/activity": {
+      "get": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "tags": [
+          "clients"
+        ],
+        "summary": "List client-related project activity",
+        "responses": {
+          "200": {
+            "description": "Client activity feed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetClientsIdActivity200Response"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/setup": {
+      "post": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "tags": [
+          "projects"
+        ],
+        "summary": "Create a client, project, and initial team atomically",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProjectSetupRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Project setup committed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostProjectsSetup201Response"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "One or more selected team members are invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/projects/{id}": {
       "get": {
         "security": [
@@ -902,7 +2462,14 @@
         "summary": "Get project detail",
         "responses": {
           "200": {
-            "description": "Project detail"
+            "description": "Project detail",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetProjectsId200Response"
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -968,7 +2535,14 @@
         "summary": "Update project",
         "responses": {
           "200": {
-            "description": "Project updated"
+            "description": "Project updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PutProjectsId200Response"
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -1100,9 +2674,26 @@
           "projects"
         ],
         "summary": "Transition project phase",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProjectPhaseTransitionRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
-            "description": "Phase changed"
+            "description": "Phase changed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PatchProjectsIdPhase200Response"
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -1170,7 +2761,14 @@
         "summary": "List project activity",
         "responses": {
           "200": {
-            "description": "Project activity feed"
+            "description": "Project activity feed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetProjectsIdActivity200Response"
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -1238,7 +2836,14 @@
         "summary": "List project team members",
         "responses": {
           "200": {
-            "description": "Project team members"
+            "description": "Project team members",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetProjectsIdTeam200Response"
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -1301,10 +2906,17 @@
         "tags": [
           "projects"
         ],
-        "summary": "Add or update project team member role",
+        "summary": "Add a project team member",
         "responses": {
           "201": {
-            "description": "Project team member added/updated"
+            "description": "Project team member added",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostProjectsIdTeam201Response"
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -1360,6 +2972,102 @@
       }
     },
     "/projects/{id}/team/{userId}": {
+      "patch": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "tags": [
+          "projects"
+        ],
+        "summary": "Change a project team member role",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "role"
+                ],
+                "properties": {
+                  "role": {
+                    "type": "string",
+                    "enum": [
+                      "manager",
+                      "member",
+                      "viewer"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Project team role updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PatchProjectsIdTeamUserId200Response"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
       "delete": {
         "security": [
           {
@@ -1440,7 +3148,14 @@
         "summary": "List tasks (RBAC scoped)",
         "responses": {
           "200": {
-            "description": "Tasks list"
+            "description": "Tasks list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetTasks200Response"
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -1506,7 +3221,14 @@
         "summary": "Create task",
         "responses": {
           "201": {
-            "description": "Task created"
+            "description": "Task created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostTasks201Response"
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -1574,7 +3296,14 @@
         "summary": "Get task",
         "responses": {
           "200": {
-            "description": "Task detail"
+            "description": "Task detail",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetTasksId200Response"
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -1640,7 +3369,14 @@
         "summary": "Update task",
         "responses": {
           "200": {
-            "description": "Task updated"
+            "description": "Task updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PutTasksId200Response"
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -1774,7 +3510,90 @@
         "summary": "Transition task status",
         "responses": {
           "200": {
-            "description": "Task status updated"
+            "description": "Task status updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PatchTasksIdStatus200Response"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tasks/{id}/deliverables": {
+      "post": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "tags": [
+          "tasks",
+          "deliverables"
+        ],
+        "summary": "Link an existing deliverable or create one for a task",
+        "responses": {
+          "201": {
+            "description": "Deliverable linked to task",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostTasksIdDeliverables201Response"
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -1842,7 +3661,14 @@
         "summary": "List task comments",
         "responses": {
           "200": {
-            "description": "Task comments list"
+            "description": "Task comments list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetTasksIdComments200Response"
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -1908,7 +3734,14 @@
         "summary": "Create task comment",
         "responses": {
           "201": {
-            "description": "Task comment created"
+            "description": "Task comment created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostTasksIdComments201Response"
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -2044,7 +3877,169 @@
         "summary": "Bulk transition task statuses",
         "responses": {
           "200": {
-            "description": "Bulk status result"
+            "description": "Bulk status result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostTasksBulkStatus200Response"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tasks/bulk/update": {
+      "post": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "tags": [
+          "tasks"
+        ],
+        "summary": "Bulk assign or classify tasks in one project",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "taskIds"
+                ],
+                "properties": {
+                  "taskIds": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 100,
+                    "items": {
+                      "type": "string",
+                      "format": "uuid"
+                    }
+                  },
+                  "assigneeIds": {
+                    "type": "array",
+                    "maxItems": 50,
+                    "items": {
+                      "type": "string",
+                      "format": "uuid"
+                    }
+                  },
+                  "phase": {
+                    "type": "string",
+                    "enum": [
+                      "client_acquisition",
+                      "strategy_planning",
+                      "production",
+                      "post_production",
+                      "delivery"
+                    ]
+                  },
+                  "priority": {
+                    "type": "string",
+                    "enum": [
+                      "low",
+                      "medium",
+                      "high",
+                      "urgent"
+                    ]
+                  },
+                  "addLabels": {
+                    "type": "array",
+                    "maxItems": 12,
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "name",
+                        "color"
+                      ],
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 50
+                        },
+                        "color": {
+                          "type": "string",
+                          "enum": [
+                            "violet",
+                            "blue",
+                            "green",
+                            "amber",
+                            "rose",
+                            "slate"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Bulk task update result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostTasksBulkUpdate200Response"
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -2112,7 +4107,14 @@
         "summary": "Bulk delete tasks",
         "responses": {
           "200": {
-            "description": "Bulk delete result"
+            "description": "Bulk delete result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostTasksBulkDelete200Response"
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -2180,7 +4182,14 @@
         "summary": "List files by project",
         "responses": {
           "200": {
-            "description": "Project files"
+            "description": "Project files",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetFilesProjectProjectId200Response"
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -2248,7 +4257,14 @@
         "summary": "Register linked external file",
         "responses": {
           "201": {
-            "description": "Linked file created"
+            "description": "Linked file created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostFilesLink201Response"
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -2316,7 +4332,14 @@
         "summary": "Register uploaded file metadata",
         "responses": {
           "201": {
-            "description": "Uploaded file created"
+            "description": "Uploaded file created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostFilesUpload201Response"
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -2384,7 +4407,14 @@
         "summary": "Upload a local project file (multipart, maximum 50 MB)",
         "responses": {
           "201": {
-            "description": "File stored and registered"
+            "description": "File stored and registered",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostFilesUploadBinary201Response"
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -2452,7 +4482,172 @@
         "summary": "Authorize and stream file content",
         "responses": {
           "200": {
-            "description": "File content"
+            "description": "File content",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/files/{id}/preview-session": {
+      "post": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "tags": [
+          "files"
+        ],
+        "summary": "Create a five-minute, file-scoped in-app preview session",
+        "responses": {
+          "200": {
+            "description": "Preview session created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostFilesIdPreviewSession200Response"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/files/{id}/preview": {
+      "get": {
+        "tags": [
+          "files"
+        ],
+        "summary": "Stream inline preview content using the HTTP-only preview session",
+        "responses": {
+          "200": {
+            "description": "Complete preview content",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "206": {
+            "description": "Partial preview content for media seeking",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -2520,7 +4715,14 @@
         "summary": "Get mock signed upload URL",
         "responses": {
           "200": {
-            "description": "Upload URL generated"
+            "description": "Upload URL generated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostFilesUploadUrl200Response"
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -2588,7 +4790,14 @@
         "summary": "Finalize upload record",
         "responses": {
           "201": {
-            "description": "Upload completed"
+            "description": "Upload completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostFilesCompleteUpload201Response"
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -2656,7 +4865,14 @@
         "summary": "Get download URL for file",
         "responses": {
           "200": {
-            "description": "Download URL generated"
+            "description": "Download URL generated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetFilesIdDownloadUrl200Response"
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -2789,10 +5005,17 @@
         "tags": [
           "analytics"
         ],
-        "summary": "Dashboard analytics (RBAC scoped)",
+        "summary": "Supervisor action dashboard (RBAC scoped)",
         "responses": {
           "200": {
-            "description": "Dashboard metrics"
+            "description": "Review queues, delivery risks, due work, and team workload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DashboardResponse"
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -2860,7 +5083,14 @@
         "summary": "Project analytics report (RBAC scoped)",
         "responses": {
           "200": {
-            "description": "Projects analytics"
+            "description": "Projects analytics",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetAnalyticsProjects200Response"
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -2928,7 +5158,14 @@
         "summary": "Team analytics report (RBAC scoped)",
         "responses": {
           "200": {
-            "description": "Team analytics"
+            "description": "Team analytics",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetAnalyticsTeam200Response"
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -2996,7 +5233,14 @@
         "summary": "Timeline analytics report (RBAC scoped)",
         "responses": {
           "200": {
-            "description": "Timeline analytics"
+            "description": "Timeline analytics",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetAnalyticsTimeline200Response"
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -3064,7 +5308,14 @@
         "summary": "Projects analytics CSV",
         "responses": {
           "200": {
-            "description": "CSV download"
+            "description": "CSV download",
+            "content": {
+              "text/csv": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -3132,7 +5383,14 @@
         "summary": "Team analytics CSV",
         "responses": {
           "200": {
-            "description": "CSV download"
+            "description": "CSV download",
+            "content": {
+              "text/csv": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -3200,7 +5458,14 @@
         "summary": "Global/scoped search (RBAC scoped)",
         "responses": {
           "200": {
-            "description": "Search results"
+            "description": "Search results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetSearch200Response"
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -3266,9 +5531,51 @@
           "notifications"
         ],
         "summary": "List current user notifications",
+        "parameters": [
+          {
+            "name": "view",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "unread",
+                "action_required",
+                "resolved",
+                "archived"
+              ]
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          }
+        ],
         "responses": {
           "200": {
-            "description": "Notifications list"
+            "description": "Notifications list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationsResponse"
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -3336,7 +5643,14 @@
         "summary": "Mark all current user notifications as read",
         "responses": {
           "200": {
-            "description": "Bulk read update result"
+            "description": "Bulk read update result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdatedCountResponse"
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -3404,7 +5718,14 @@
         "summary": "Mark notification as read",
         "responses": {
           "200": {
-            "description": "Notification marked as read"
+            "description": "Notification marked as read",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationResponse"
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -3472,7 +5793,14 @@
         "summary": "List client portal memberships and pending invitations",
         "responses": {
           "200": {
-            "description": "Client access list"
+            "description": "Client access list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetClientInvitations200Response"
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -3538,7 +5866,14 @@
         "summary": "Create a seven-day client invitation",
         "responses": {
           "201": {
-            "description": "Invitation and one-time URL"
+            "description": "Invitation and one-time URL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostClientInvitations201Response"
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -3606,7 +5941,14 @@
         "summary": "List invitations for a client organization",
         "responses": {
           "200": {
-            "description": "Invitation list"
+            "description": "Invitation list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetClientInvitationsClientClientId200Response"
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -3737,7 +6079,14 @@
         "summary": "Inspect an invitation before acceptance",
         "responses": {
           "200": {
-            "description": "Sanitized invitation details"
+            "description": "Sanitized invitation details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetClientInvitationsTokenToken200Response"
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -3800,7 +6149,14 @@
         "summary": "Accept invitation and create client account",
         "responses": {
           "201": {
-            "description": "Client membership and session created"
+            "description": "Client membership and session created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostClientInvitationsTokenTokenAccept201Response"
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -3868,7 +6224,14 @@
         "summary": "Accept invitation with the signed-in invited account",
         "responses": {
           "200": {
-            "description": "Client membership created"
+            "description": "Client membership created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostClientInvitationsTokenTokenAcceptExisting200Response"
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -3936,7 +6299,14 @@
         "summary": "Create a project deliverable",
         "responses": {
           "201": {
-            "description": "Deliverable created"
+            "description": "Deliverable created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostDeliverables201Response"
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -4004,7 +6374,14 @@
         "summary": "List deliverables, versions, and reviews",
         "responses": {
           "200": {
-            "description": "Deliverable list"
+            "description": "Deliverable list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetDeliverablesProjectProjectId200Response"
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -4069,10 +6446,713 @@
         "tags": [
           "deliverables"
         ],
-        "summary": "Submit a numbered deliverable version for review",
+        "summary": "Submit a numbered deliverable version for internal review",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/idempotencyKeyHeader"
+          }
+        ],
         "responses": {
           "201": {
-            "description": "Version submitted"
+            "description": "Version sent to project supervisors",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostDeliverablesIdVersions201Response"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/notifications/{id}/archive": {
+      "patch": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "tags": [
+          "notifications"
+        ],
+        "summary": "Archive a non-actionable or resolved notification",
+        "responses": {
+          "200": {
+            "description": "Notification archived",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NullableNotificationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/notifications/{id}/restore": {
+      "patch": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "tags": [
+          "notifications"
+        ],
+        "summary": "Restore an archived notification",
+        "responses": {
+          "200": {
+            "description": "Notification restored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/client-invitations/memberships/{clientId}/{userId}": {
+      "patch": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "tags": [
+          "invitations"
+        ],
+        "summary": "Change an accepted client portal role (administrator only)",
+        "responses": {
+          "200": {
+            "description": "Client membership role updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PatchClientInvitationsMembershipsClientIdUserId200Response"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "tags": [
+          "invitations"
+        ],
+        "summary": "Revoke accepted client portal access (administrator only)",
+        "responses": {
+          "204": {
+            "description": "Client membership revoked"
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/deliverables/versions/{versionId}/internal-review": {
+      "post": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "tags": [
+          "deliverables"
+        ],
+        "summary": "Approve or request changes during internal review",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/idempotencyKeyHeader"
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Internal review recorded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostDeliverablesVersionsVersionIdInternalReview201Response"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/deliverables/versions/{versionId}/submit-client": {
+      "post": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "tags": [
+          "deliverables"
+        ],
+        "summary": "Submit an internally approved version to client reviewers",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/idempotencyKeyHeader"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Version submitted to the client",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostDeliverablesVersionsVersionIdSubmitClient200Response"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/deliverables/versions/{versionId}/withdraw-client": {
+      "post": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "tags": [
+          "deliverables"
+        ],
+        "summary": "Pull an active client review back to internal approval by its original submitter",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/idempotencyKeyHeader"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Version withdrawn from client review",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostDeliverablesVersionsVersionIdWithdrawClient200Response"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/deliverables/versions/{versionId}/messages": {
+      "post": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "tags": [
+          "deliverables"
+        ],
+        "summary": "Send a supervisor reply to the client review thread",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/idempotencyKeyHeader"
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Message sent",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostDeliverablesVersionsVersionIdMessages201Response"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/deliverables/versions/{versionId}/forward-feedback": {
+      "post": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "tags": [
+          "deliverables"
+        ],
+        "summary": "Route edited client feedback to selected project tasks",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/idempotencyKeyHeader"
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Feedback added to tasks and assignees notified",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostDeliverablesVersionsVersionIdForwardFeedback201Response"
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -4140,7 +7220,14 @@
         "summary": "List signed-in client's projects",
         "responses": {
           "200": {
-            "description": "Sanitized client project list"
+            "description": "Sanitized client project list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetClientPortalProjects200Response"
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -4208,7 +7295,14 @@
         "summary": "Get sanitized client project detail",
         "responses": {
           "200": {
-            "description": "Client project detail"
+            "description": "Client project detail",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetClientPortalProjectsProjectId200Response"
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -4274,9 +7368,203 @@
           "client portal"
         ],
         "summary": "Approve or request changes on the latest version",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/idempotencyKeyHeader"
+          }
+        ],
         "responses": {
           "201": {
-            "description": "Review recorded"
+            "description": "Review recorded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostClientPortalVersionsVersionIdReviews201Response"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/client-portal/reviews": {
+      "get": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "tags": [
+          "client portal"
+        ],
+        "summary": "List the signed-in client's review-ready deliverables and history",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "reviewed",
+                "history"
+              ],
+              "default": "pending"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "oldest",
+                "newest",
+                "deadline"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sanitized client review inbox",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientReviewInboxResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/client-portal/versions/{versionId}/messages": {
+      "post": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "tags": [
+          "client portal"
+        ],
+        "summary": "Send a message to project supervisors in a deliverable thread",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/idempotencyKeyHeader"
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Client message sent",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostClientPortalVersionsVersionIdMessages201Response"
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -4344,7 +7632,14 @@
         "summary": "List users",
         "responses": {
           "200": {
-            "description": "Users list"
+            "description": "Users list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetUsers200Response"
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -4410,7 +7705,157 @@
         "summary": "Admin: create a staff account",
         "responses": {
           "201": {
-            "description": "Staff account created"
+            "description": "Staff account created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostUsers201Response"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/users/me/change-password": {
+      "post": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "tags": [
+          "users"
+        ],
+        "summary": "Change the current user's password",
+        "responses": {
+          "204": {
+            "description": "Password changed and other sessions revoked"
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/users/admin/password-reset": {
+      "post": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "tags": [
+          "admin"
+        ],
+        "summary": "Administrator password reset for a user",
+        "responses": {
+          "200": {
+            "description": "Password reset result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostUsersAdminPasswordReset200Response"
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -4478,7 +7923,14 @@
         "summary": "Get user by ID",
         "responses": {
           "200": {
-            "description": "User detail"
+            "description": "User detail",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetUsersId200Response"
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -4544,7 +7996,14 @@
         "summary": "Update own profile",
         "responses": {
           "200": {
-            "description": "User updated"
+            "description": "User updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PutUsersId200Response"
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -4612,7 +8071,14 @@
         "summary": "Admin: list audit logs",
         "responses": {
           "200": {
-            "description": "Audit logs list"
+            "description": "Audit logs list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetUsersAuditLogs200Response"
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -4680,7 +8146,14 @@
         "summary": "Admin: activate/deactivate user",
         "responses": {
           "200": {
-            "description": "User status updated"
+            "description": "User status updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PatchUsersIdStatus200Response"
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -4748,7 +8221,14 @@
         "summary": "Admin: reset user project role assignments",
         "responses": {
           "200": {
-            "description": "Roles reset result"
+            "description": "Roles reset result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostUsersIdProjectRolesReset200Response"
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",

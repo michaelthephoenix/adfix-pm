@@ -9,6 +9,7 @@ export type AccessTokenPayload = {
   name: string;
   isAdmin: boolean;
   accountType: "staff" | "client";
+  authVersion: number;
   tokenType: "access";
 };
 
@@ -16,6 +17,12 @@ export type RefreshTokenPayload = {
   userId: string;
   sessionId: string;
   tokenType: "refresh";
+};
+
+export type FilePreviewTokenPayload = {
+  userId: string;
+  fileId: string;
+  tokenType: "file_preview";
 };
 
 export function signAccessToken(payload: Omit<AccessTokenPayload, "tokenType">): string {
@@ -48,6 +55,18 @@ export function verifyAccessToken(token: string): AccessTokenPayload {
 
 export function verifyRefreshToken(token: string): RefreshTokenPayload {
   return jwt.verify(token, env.JWT_REFRESH_SECRET) as RefreshTokenPayload;
+}
+
+export function signFilePreviewToken(payload: Omit<FilePreviewTokenPayload, "tokenType">): string {
+  return jwt.sign(
+    { ...payload, tokenType: "file_preview" },
+    env.JWT_ACCESS_SECRET,
+    { expiresIn: "5m" }
+  );
+}
+
+export function verifyFilePreviewToken(token: string): FilePreviewTokenPayload {
+  return jwt.verify(token, env.JWT_ACCESS_SECRET) as FilePreviewTokenPayload;
 }
 
 export function makeRefreshSessionId(): string {

@@ -4,4 +4,5 @@ export type AuthenticatedUser = {
   name: string;
   isAdmin: boolean;
   accountType: "staff" | "client";
+  mustChangePassword: boolean;
 };

@@ -1,4 +1,5 @@
 import bcrypt from "bcryptjs";
+import { randomBytes } from "node:crypto";
 import { pool } from "../db/pool.js";
 
 type UserRow = {
@@ -9,6 +10,7 @@ type UserRow = {
   is_active: boolean;
   is_admin: boolean;
   account_type: "staff" | "client";
+  must_change_password: boolean;
   last_login_at: Date | null;
   created_at: Date;
   updated_at: Date;
@@ -56,6 +58,7 @@ export async function listUsers(input?: {
          is_active,
          is_admin,
          account_type,
+         must_change_password,
          last_login_at,
          created_at,
          updated_at
@@ -87,10 +90,10 @@ export async function createStaffUser(input: {
   const passwordHash = await bcrypt.hash(input.password, 12);
   try {
     const result = await pool.query<UserRow>(
-      `INSERT INTO users (email, name, password_hash, is_active, is_admin, account_type)
-       VALUES ($1, $2, $3, TRUE, $4, 'staff')
+      `INSERT INTO users (email, name, password_hash, is_active, is_admin, account_type, must_change_password)
+       VALUES ($1, $2, $3, TRUE, $4, 'staff', TRUE)
        RETURNING id, email, name, avatar_url, is_active, is_admin, account_type,
-         last_login_at, created_at, updated_at`,
+         must_change_password, last_login_at, created_at, updated_at`,
       [input.email.toLowerCase(), input.name, passwordHash, input.isAdmin]
     );
     return result.rows[0];
@@ -110,6 +113,7 @@ export async function getUserById(userId: string) {
        is_active,
       is_admin,
       account_type,
+      must_change_password,
        last_login_at,
        created_at,
        updated_at
@@ -161,6 +165,7 @@ export async function updateUserProfile(
        is_active,
        is_admin,
        account_type,
+       must_change_password,
        last_login_at,
        created_at,
        updated_at`,
@@ -171,26 +176,185 @@ export async function updateUserProfile(
 }
 
 export async function setUserActiveStatus(userId: string, isActive: boolean) {
-  const result = await pool.query<UserRow>(
-    `UPDATE users
-     SET is_active = $1, updated_at = NOW()
-     WHERE id = $2
-       AND deleted_at IS NULL
-     RETURNING
-       id,
-       email,
-       name,
-       avatar_url,
-       is_active,
-       is_admin,
-       account_type,
-       last_login_at,
-       created_at,
-       updated_at`,
-    [isActive, userId]
-  );
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const result = await client.query<UserRow>(
+      `UPDATE users
+       SET is_active = $1, updated_at = NOW()
+       WHERE id = $2
+         AND deleted_at IS NULL
+       RETURNING
+         id,
+         email,
+         name,
+         avatar_url,
+         is_active,
+         is_admin,
+         account_type,
+         must_change_password,
+         last_login_at,
+         created_at,
+         updated_at`,
+      [isActive, userId]
+    );
 
-  return result.rows[0] ?? null;
+    if (!isActive && result.rows[0]) {
+      await client.query(
+        `UPDATE auth_sessions
+         SET revoked_at = COALESCE(revoked_at, NOW())
+         WHERE user_id = $1 AND revoked_at IS NULL`,
+        [userId]
+      );
+    }
+
+    await client.query("COMMIT");
+    return result.rows[0] ?? null;
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export async function changeOwnPassword(input: {
+  userId: string;
+  currentPassword: string;
+  newPassword: string;
+}) {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const result = await client.query<{ password_hash: string }>(
+      `SELECT password_hash
+       FROM users
+       WHERE id = $1 AND is_active = TRUE AND deleted_at IS NULL
+       FOR UPDATE`,
+      [input.userId]
+    );
+    const user = result.rows[0];
+    if (!user) {
+      await client.query("ROLLBACK");
+      return "not_found" as const;
+    }
+    if (!await bcrypt.compare(input.currentPassword, user.password_hash)) {
+      await client.query("ROLLBACK");
+      return "invalid_current_password" as const;
+    }
+    if (await bcrypt.compare(input.newPassword, user.password_hash)) {
+      await client.query("ROLLBACK");
+      return "password_reused" as const;
+    }
+
+    const passwordHash = await bcrypt.hash(input.newPassword, 12);
+    await client.query(
+      `UPDATE users
+       SET password_hash = $2,
+           must_change_password = FALSE,
+           password_changed_at = NOW(),
+           auth_version = auth_version + 1,
+           updated_at = NOW()
+       WHERE id = $1`,
+      [input.userId, passwordHash]
+    );
+    await client.query(
+      `UPDATE auth_sessions
+       SET revoked_at = COALESCE(revoked_at, NOW())
+       WHERE user_id = $1 AND revoked_at IS NULL`,
+      [input.userId]
+    );
+    await client.query(
+      `INSERT INTO activity_log (user_id, action, details)
+       VALUES ($1, 'user_password_changed', '{}'::jsonb)`,
+      [input.userId]
+    );
+    await client.query("COMMIT");
+    return "changed" as const;
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export async function issueTemporaryPassword(input: {
+  actorUserId: string;
+  email: string;
+}) {
+  const temporaryPassword = `${randomBytes(18).toString("base64url")}aA1!`;
+  const passwordHash = await bcrypt.hash(temporaryPassword, 12);
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const targetResult = await client.query<{
+      id: string;
+      email: string;
+      name: string;
+      account_type: "staff" | "client";
+      is_active: boolean;
+    }>(
+      `SELECT id, email, name, account_type, is_active
+       FROM users
+       WHERE email = $1 AND deleted_at IS NULL
+       FOR UPDATE`,
+      [input.email.toLowerCase()]
+    );
+    const target = targetResult.rows[0];
+    if (!target) {
+      await client.query("ROLLBACK");
+      return "not_found" as const;
+    }
+    if (target.id === input.actorUserId) {
+      await client.query("ROLLBACK");
+      return "self_reset" as const;
+    }
+    if (!target.is_active) {
+      await client.query("ROLLBACK");
+      return "inactive" as const;
+    }
+
+    await client.query(
+      `UPDATE users
+       SET password_hash = $2,
+           must_change_password = TRUE,
+           password_changed_at = NOW(),
+           auth_version = auth_version + 1,
+           updated_at = NOW()
+       WHERE id = $1`,
+      [target.id, passwordHash]
+    );
+    await client.query(
+      `UPDATE auth_sessions
+       SET revoked_at = COALESCE(revoked_at, NOW())
+       WHERE user_id = $1 AND revoked_at IS NULL`,
+      [target.id]
+    );
+    await client.query(
+      `INSERT INTO activity_log (user_id, action, details)
+       VALUES ($1, 'user_temporary_password_issued', $2::jsonb)`,
+      [input.actorUserId, JSON.stringify({
+        targetUserId: target.id,
+        email: target.email,
+        accountType: target.account_type
+      })]
+    );
+    await client.query("COMMIT");
+    return {
+      id: target.id,
+      email: target.email,
+      name: target.name,
+      accountType: target.account_type,
+      temporaryPassword,
+      mustChangePassword: true as const
+    };
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 export async function resetUserProjectRoles(userId: string, projectId?: string) {

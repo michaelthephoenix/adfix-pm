@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { ArrowUpDown, Search, SlidersHorizontal, X } from "lucide-react";
 import { apiRequest } from "../lib/api";
+import { formatLocalDateTime } from "../lib/format";
 import { useAuth } from "../state/auth";
 import { EmptyState, ErrorState, LoadingState } from "../components/States";
 import { Button } from "../components/ui/Button";
@@ -151,7 +152,7 @@ export function AuditLogsPage() {
       <div className="card">
         {auditLogsQuery.isLoading ? <LoadingState message="Loading audit logs..." /> : auditLogsQuery.isError ? <ErrorState message="Could not load audit logs." /> : !auditLogsQuery.data?.data.length ? <EmptyState message="No audit entries." /> : (
           <div className="activity-list">
-            {auditLogsQuery.data.data.map((entry) => <article key={entry.id} className="activity-item"><p className="notice-title">{formatAction(entry.action)}</p><p className="muted">by {entry.user_name ?? entry.user_email ?? "system"} at {new Date(entry.created_at).toLocaleString()}</p></article>)}
+            {auditLogsQuery.data.data.map((entry) => <article key={entry.id} className="activity-item"><p className="notice-title">{formatAction(entry.action)}</p><p className="muted">by {entry.user_name ?? entry.user_email ?? "system"} at <time dateTime={entry.created_at}>{formatLocalDateTime(entry.created_at)}</time></p></article>)}
           </div>
         )}
       </div>

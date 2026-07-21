@@ -6,10 +6,9 @@ import { createUploadedFile } from "../services/files.service.js";
 
 export type SeedProfile = "admin_only" | "demo";
 
-const seedAdminEmail = process.env.SEED_ADMIN_EMAIL ?? "admin@adfix.local";
-const seedAdminName = process.env.SEED_ADMIN_NAME ?? "Adfix Admin";
-const seedAdminPassword = process.env.SEED_ADMIN_PASSWORD ?? "ChangeMe123!";
-const seedDemoUserPassword = process.env.SEED_DEMO_USER_PASSWORD ?? "DemoUser123!";
+const seedAdminEmail = env.SEED_ADMIN_EMAIL.toLowerCase();
+const seedAdminName = env.SEED_ADMIN_NAME;
+const seedDemoUserPassword = env.SEED_DEMO_USER_PASSWORD;
 
 const demoUsers = [
   { email: "manager@adfix.local", name: "Project Manager" },
@@ -20,26 +19,49 @@ const demoUsers = [
 ];
 const demoClientUser = { email: "client@adfix.local", name: "Demo Client Reviewer" };
 
-async function ensureAdminUser() {
-  const passwordHash = await bcrypt.hash(seedAdminPassword, 12);
-
-  await pool.query(
-    `
-    INSERT INTO users (email, name, password_hash, is_active, is_admin)
-    VALUES ($1, $2, $3, TRUE, TRUE)
-    ON CONFLICT (email)
-    DO UPDATE
-      SET name = EXCLUDED.name,
-          password_hash = EXCLUDED.password_hash,
-          is_active = TRUE,
-          is_admin = TRUE,
-          deleted_at = NULL,
-          updated_at = NOW()
-    `,
-    [seedAdminEmail, seedAdminName, passwordHash]
+async function ensureAdminUser(profile: SeedProfile) {
+  const existingAdmin = await pool.query<{ email: string }>(
+    `SELECT email
+     FROM users
+     WHERE is_admin = TRUE AND is_active = TRUE AND deleted_at IS NULL
+     LIMIT 1`
   );
 
-  console.log(`Seeded admin user: ${seedAdminEmail}`);
+  if (existingAdmin.rows[0]) {
+    console.log(`Administrator already configured: ${existingAdmin.rows[0].email}`);
+    return;
+  }
+
+  const bootstrapPassword = env.SEED_ADMIN_PASSWORD
+    ?? (env.NODE_ENV === "production" ? null : "ChangeMe123!");
+  if (!bootstrapPassword) {
+    throw new Error(
+      "No active administrator exists. Set SEED_ADMIN_PASSWORD once to bootstrap the first production administrator."
+    );
+  }
+
+  const passwordHash = await bcrypt.hash(bootstrapPassword, 12);
+
+  const inserted = await pool.query<{ email: string }>(
+    `
+    INSERT INTO users (
+      email, name, password_hash, is_active, is_admin, account_type, must_change_password
+    )
+    VALUES ($1, $2, $3, TRUE, TRUE, 'staff', $4)
+    ON CONFLICT (email)
+    DO NOTHING
+    RETURNING email
+    `,
+    [seedAdminEmail, seedAdminName, passwordHash, profile !== "demo"]
+  );
+
+  if (!inserted.rows[0]) {
+    throw new Error(
+      `Cannot bootstrap administrator: ${seedAdminEmail} already belongs to a non-administrator account.`
+    );
+  }
+
+  console.log(`Bootstrapped administrator: ${seedAdminEmail}`);
 }
 
 async function ensureDemoUsers() {
@@ -79,8 +101,11 @@ async function ensureDemoUsers() {
 
 async function seedDemoData() {
   const adminUser = await pool.query<{ id: string }>(
-    "SELECT id FROM users WHERE email = $1 AND deleted_at IS NULL",
-    [seedAdminEmail]
+    `SELECT id
+     FROM users
+     WHERE is_admin = TRUE AND is_active = TRUE AND deleted_at IS NULL
+     ORDER BY created_at ASC
+     LIMIT 1`
   );
   const adminId = adminUser.rows[0]?.id;
   if (!adminId) throw new Error("Admin user was not found after seeding.");
@@ -183,8 +208,11 @@ async function seedDemoData() {
       [projectId, adminId]
     );
     await pool.query(
-      `INSERT INTO deliverable_versions (deliverable_id, file_id, version_number, submission_note, submitted_by)
-       VALUES ($1, $2, 1, 'First concept version', $3)`,
+      `INSERT INTO deliverable_versions (
+         deliverable_id, file_id, version_number, submission_note, submitted_by,
+         client_submitted_by, client_submitted_at
+       )
+       VALUES ($1, $2, 1, 'First concept version', $3, $3, NOW())`,
       [deliverable.rows[0].id, file.id, adminId]
     );
   }
@@ -193,7 +221,7 @@ async function seedDemoData() {
 }
 
 export async function seedDatabase(profile: SeedProfile = env.SEED_PROFILE) {
-  await ensureAdminUser();
+  await ensureAdminUser(profile);
 
   if (profile === "demo") {
     await ensureDemoUsers();

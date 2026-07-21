@@ -6,15 +6,18 @@ import type { AuthenticatedRequest } from "../types/http.js";
 import { insertActivityLog } from "../services/activity-log.service.js";
 import {
   createStaffUser,
+  changeOwnPassword,
   getUserById,
+  issueTemporaryPassword,
   listAuditLogs,
   listUsers,
   resetUserProjectRoles,
   setUserActiveStatus,
   updateUserProfile
 } from "../services/users.service.js";
-import { sendConflict, sendForbidden, sendNotFound, sendUnauthorized } from "../utils/http-error.js";
+import { sendConflict, sendError, sendForbidden, sendNotFound, sendUnauthorized } from "../utils/http-error.js";
 import { sendValidationError } from "../utils/validation.js";
+import { clearRefreshCookie } from "../utils/auth-cookie.js";
 
 export const usersRouter = Router();
 
@@ -29,11 +32,25 @@ const usersListQuerySchema = z.object({
   sortOrder: z.enum(["asc", "desc"]).optional().default("asc")
 });
 
+const strongPasswordSchema = z.string().min(12).max(128)
+  .regex(/[a-z]/, "Password must include a lowercase letter")
+  .regex(/[A-Z]/, "Password must include an uppercase letter")
+  .regex(/[0-9]/, "Password must include a number");
+
 const createStaffUserSchema = z.object({
   email: z.string().trim().email(),
   name: z.string().trim().min(1).max(255),
-  password: z.string().min(8).max(128),
+  password: strongPasswordSchema,
   isAdmin: z.boolean().optional().default(false)
+});
+
+const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1).max(128),
+  newPassword: strongPasswordSchema
+});
+
+const adminPasswordResetSchema = z.object({
+  email: z.string().trim().email()
 });
 
 const auditLogsQuerySchema = z.object({
@@ -67,6 +84,48 @@ const resetRolesSchema = z.object({
 });
 
 usersRouter.use(requireAuth);
+
+usersRouter.post("/me/change-password", async (req: AuthenticatedRequest, res) => {
+  if (!req.user) return sendUnauthorized(res, "Unauthorized");
+  const parsedBody = changePasswordSchema.safeParse(req.body);
+  if (!parsedBody.success) {
+    return sendValidationError(res, "Invalid password change payload", parsedBody.error);
+  }
+
+  const result = await changeOwnPassword({ userId: req.user.id, ...parsedBody.data });
+  if (result === "not_found") return sendNotFound(res, "User not found");
+  if (result === "invalid_current_password") {
+    return sendError(res, 400, "CURRENT_PASSWORD_INCORRECT", "Current password is incorrect");
+  }
+  if (result === "password_reused") {
+    return sendError(res, 409, "PASSWORD_REUSE", "New password must be different from the current password");
+  }
+
+  clearRefreshCookie(res);
+  res.setHeader("Cache-Control", "no-store");
+  return res.status(204).send();
+});
+
+usersRouter.post("/admin/password-reset", requireAdmin, async (req: AuthenticatedRequest, res) => {
+  if (!req.user) return sendUnauthorized(res, "Unauthorized");
+  const parsedBody = adminPasswordResetSchema.safeParse(req.body);
+  if (!parsedBody.success) {
+    return sendValidationError(res, "Invalid password reset payload", parsedBody.error);
+  }
+
+  const result = await issueTemporaryPassword({ actorUserId: req.user.id, email: parsedBody.data.email });
+  if (result === "not_found") return sendNotFound(res, "User not found");
+  if (result === "self_reset") {
+    return sendConflict(res, "Use Change password to update your own account");
+  }
+  if (result === "inactive") {
+    return sendConflict(res, "Reactivate this account before issuing a temporary password");
+  }
+
+  res.setHeader("Cache-Control", "no-store");
+  res.setHeader("Pragma", "no-cache");
+  return res.status(200).json({ data: result });
+});
 
 usersRouter.get("/", requireStaff, async (req, res) => {
   const parsedQuery = usersListQuerySchema.safeParse(req.query);

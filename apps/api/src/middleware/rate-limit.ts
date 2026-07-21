@@ -5,13 +5,22 @@ function skipInTest() {
   return env.NODE_ENV === "test";
 }
 
-export const authRateLimiter = rateLimit({
+export const loginRateLimiter = rateLimit({
   windowMs: env.AUTH_RATE_LIMIT_WINDOW_MS,
   max: env.AUTH_RATE_LIMIT_MAX,
   standardHeaders: true,
   legacyHeaders: false,
   skip: skipInTest,
   message: { error: "Too many auth requests, please try again later." }
+});
+
+export const refreshRateLimiter = rateLimit({
+  windowMs: env.REFRESH_RATE_LIMIT_WINDOW_MS,
+  max: env.REFRESH_RATE_LIMIT_MAX,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: skipInTest,
+  message: { error: "Too many session refresh requests, please try again later." }
 });
 
 export const apiRateLimiter = rateLimit({

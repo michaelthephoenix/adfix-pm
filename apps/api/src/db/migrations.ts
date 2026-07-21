@@ -1,7 +1,8 @@
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { pool } from "./pool.js";
+import type { PoolClient } from "pg";
+import { isEmbeddedDatabase, pool } from "./pool.js";
 
 type MigrationFile = {
   name: string;
@@ -28,9 +29,8 @@ async function listMigrationFiles(): Promise<MigrationFile[]> {
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
-async function applyMigration(file: MigrationFile) {
+async function applyMigration(client: PoolClient, file: MigrationFile) {
   const sql = await readFile(file.fullPath, "utf-8");
-  const client = await pool.connect();
 
   try {
     await client.query("BEGIN");
@@ -41,33 +41,41 @@ async function applyMigration(file: MigrationFile) {
   } catch (error) {
     await client.query("ROLLBACK");
     throw error;
-  } finally {
-    client.release();
   }
 }
 
 export async function runMigrations() {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS schema_migrations (
-      filename TEXT PRIMARY KEY,
-      applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )
-  `);
+  const client = await pool.connect();
+  const lockName = "adfix_pm_schema_migrations";
 
-  const files = await listMigrationFiles();
-  const result = await pool.query<{ filename: string }>(
-    "SELECT filename FROM schema_migrations ORDER BY filename ASC"
-  );
-  const applied = new Set(result.rows.map((row) => row.filename));
-  const pending = files.filter((file) => !applied.has(file.name));
+  try {
+    if (!isEmbeddedDatabase) await client.query("SELECT pg_advisory_lock(hashtext($1))", [lockName]);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS schema_migrations (
+        filename TEXT PRIMARY KEY,
+        applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
 
-  for (const file of pending) {
-    await applyMigration(file);
-  }
+    const files = await listMigrationFiles();
+    const result = await client.query<{ filename: string }>(
+      "SELECT filename FROM schema_migrations ORDER BY filename ASC"
+    );
+    const applied = new Set(result.rows.map((row) => row.filename));
+    const pending = files.filter((file) => !applied.has(file.name));
 
-  if (pending.length === 0) {
-    console.log("No pending migrations.");
-  } else {
-    console.log(`Migration complete. Applied ${pending.length} migration(s).`);
+    for (const file of pending) await applyMigration(client, file);
+
+    if (pending.length === 0) console.log("No pending migrations.");
+    else console.log(`Migration complete. Applied ${pending.length} migration(s).`);
+  } finally {
+    if (!isEmbeddedDatabase) {
+      try {
+        await client.query("SELECT pg_advisory_unlock(hashtext($1))", [lockName]);
+      } catch (error) {
+        console.error("Failed to release migration advisory lock", error);
+      }
+    }
+    client.release();
   }
 }

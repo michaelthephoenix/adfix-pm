@@ -5,9 +5,32 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_ENV: test
+  JWT_ACCESS_SECRET: ci-access-secret-which-is-at-least-32-chars
+  JWT_REFRESH_SECRET: ci-refresh-secret-which-is-at-least-32-chars
+  ACCESS_TOKEN_TTL: 15m
+  REFRESH_TOKEN_DAYS: 30
+  SEED_ADMIN_EMAIL: admin@adfix.local
+  SEED_ADMIN_NAME: Adfix Admin
+  SEED_ADMIN_PASSWORD: ChangeMe123!
+  SEED_DEMO_USER_PASSWORD: DemoUser123!
+
 jobs:
-  api-typecheck:
+  quality:
+    name: Quality, contracts, tests, and build
     runs-on: ubuntu-latest
+    env:
+      PGLITE_DATA_DIR: /tmp/adfix-ci-pglite
+      LOCAL_UPLOAD_DIR: /tmp/adfix-ci-uploads
+      ADFIX_TEST_DATA_ROOT: /tmp/adfix-ci-tests
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -18,39 +41,51 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Install
-        run: npm install
+      - name: Install reproducibly
+        run: npm ci
 
-      - name: Typecheck API
-        run: npm run typecheck
+      - name: Check production dependency security
+        run: npm audit --omit=dev --audit-level=high
 
-  api-openapi-artifact:
-    runs-on: ubuntu-latest
-    needs: api-typecheck
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Check dead code and dependency declarations
+        run: npm run lint:dead-code
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
+      - name: Typecheck API and web
+        run: |
+          npm run typecheck
+          npm run typecheck:web
 
-      - name: Install
-        run: npm install
+      - name: Verify generated OpenAPI contracts are current
+        run: |
+          npm run openapi:sync
+          git diff --exit-code -- apps/api/openapi/openapi.v1.json apps/web/src/generated/api-schema.ts
 
-      - name: Export OpenAPI spec
-        run: npm run openapi:export
+      - name: Verify fresh and repeatable embedded migrations
+        run: |
+          npm run db:migrate
+          npm run db:migrate
 
-      - name: Upload OpenAPI artifact
+      - name: Run API tests with coverage thresholds
+        run: npm run test:api:coverage
+
+      - name: Run frontend tests with coverage thresholds
+        run: npm run test:web:coverage
+
+      - name: Build production artifacts
+        run: npm run build
+
+      - name: Upload coverage reports
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: api-openapi-v1
-          path: apps/api/openapi/openapi.v1.json
-          if-no-files-found: error
+          name: coverage-reports
+          path: |
+            apps/api/coverage
+            apps/web/coverage
+          if-no-files-found: warn
 
-  api-integration-tests:
+  postgres:
+    name: PostgreSQL migration and integration matrix
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -67,15 +102,9 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     env:
-      NODE_ENV: test
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/adfix_pm
-      JWT_ACCESS_SECRET: ci-access-secret-which-is-at-least-32-chars
-      JWT_REFRESH_SECRET: ci-refresh-secret-which-is-at-least-32-chars
-      ACCESS_TOKEN_TTL: 15m
-      REFRESH_TOKEN_DAYS: 30
-      SEED_ADMIN_EMAIL: admin@adfix.local
-      SEED_ADMIN_NAME: Adfix Admin
-      SEED_ADMIN_PASSWORD: ChangeMe123!
+      LOCAL_UPLOAD_DIR: /tmp/adfix-postgres-uploads
+      ADFIX_TEST_DATA_ROOT: /tmp/adfix-postgres-tests
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -86,22 +115,69 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Install
-        run: npm install
+      - name: Install reproducibly
+        run: npm ci
 
-      - name: Run migrations
-        run: npm run db:migrate
+      - name: Verify fresh and repeatable PostgreSQL migrations
+        run: |
+          npm run db:migrate
+          npm run db:migrate
 
-      - name: Seed database
-        run: npm run db:seed
+      - name: Seed PostgreSQL
+        run: npm run db:seed:demo
 
-      - name: Run API integration tests with coverage
-        run: npm run test:api:coverage
+      - name: Run API integration suite on PostgreSQL
+        run: npm run test:api
 
-      - name: Upload API coverage artifact
-        uses: actions/upload-artifact@v4
-        if: always()
+  e2e:
+    name: Browser acceptance and accessibility
+    runs-on: ubuntu-latest
+    needs: quality
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
-          name: api-coverage-report
-          path: apps/api/coverage
+          node-version: 22
+          cache: npm
+
+      - name: Install reproducibly
+        run: npm ci
+
+      - name: Install browser runtime
+        run: npx playwright install --with-deps chromium
+
+      - name: Run desktop and mobile journeys
+        run: npm run test:e2e
+
+      - name: Upload browser diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report
+            test-results
           if-no-files-found: warn
+
+  container:
+    name: Production container smoke test
+    runs-on: ubuntu-latest
+    needs: quality
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install reproducibly
+        run: npm ci
+
+      - name: Build and verify readiness
+        run: npm run test:container

@@ -33,7 +33,7 @@ describe("UIProvider confirmation", () => {
     render(<UIProvider><ConfirmHarness /></UIProvider>);
 
     await user.click(screen.getByRole("button", { name: "Open confirmation" }));
-    expect(screen.getByRole("dialog", { name: "Move project to Delivery?" })).toHaveClass("confirm-warning");
+    expect(screen.getByRole("alertdialog", { name: "Move project to Delivery?" })).toHaveClass("confirm-warning");
     expect(screen.getByRole("button", { name: "Keep in review" })).toHaveFocus();
 
     await user.click(screen.getByRole("button", { name: "Keep in review" }));

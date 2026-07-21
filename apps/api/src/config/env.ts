@@ -13,6 +13,9 @@ const envPath = path.join(apiRoot, ".env");
 
 const developmentAccessSecret = "adfix-local-access-secret-change-for-production";
 const developmentRefreshSecret = "adfix-local-refresh-secret-change-for-production";
+const developmentAdminEmail = "admin@adfix.local";
+const developmentAdminName = "Adfix Admin";
+const developmentAdminPassword = "ChangeMe123!";
 
 loadDotenv({ path: envPath });
 
@@ -33,10 +36,16 @@ const envSchema = z.object({
   REFRESH_TOKEN_DAYS: z.coerce.number().int().positive().default(30),
   AUTH_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60_000),
   AUTH_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(10),
+  REFRESH_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60_000),
+  REFRESH_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(60),
   API_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60_000),
   API_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(120),
   CORS_ALLOWED_ORIGINS: z.string().default("http://localhost:3000,http://localhost:4000,http://localhost:5173"),
-  SEED_PROFILE: z.enum(["admin_only", "demo"]).default("admin_only")
+  SEED_PROFILE: z.enum(["admin_only", "demo"]).default("admin_only"),
+  SEED_ADMIN_EMAIL: z.string().email().default(developmentAdminEmail),
+  SEED_ADMIN_NAME: z.string().trim().min(1).max(255).default(developmentAdminName),
+  SEED_ADMIN_PASSWORD: z.string().min(12).max(128).optional(),
+  SEED_DEMO_USER_PASSWORD: z.string().min(12).max(128).default("DemoUser123!")
 }).superRefine((values, context) => {
   if (values.NODE_ENV !== "production") return;
 
@@ -59,6 +68,57 @@ const envSchema = z.object({
       code: z.ZodIssueCode.custom,
       path: ["JWT_REFRESH_SECRET"],
       message: "Set a production JWT refresh secret"
+    });
+  }
+
+  if (values.JWT_ACCESS_SECRET === values.JWT_REFRESH_SECRET) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["JWT_REFRESH_SECRET"],
+      message: "Access and refresh tokens must use different secrets"
+    });
+  }
+
+  if (!values.COOKIE_SECURE) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["COOKIE_SECURE"],
+      message: "Production refresh cookies must be secure"
+    });
+  }
+
+  if (!values.APP_ORIGIN.startsWith("https://")) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["APP_ORIGIN"],
+      message: "Production APP_ORIGIN must use HTTPS"
+    });
+  }
+
+  if (values.CORS_ALLOWED_ORIGINS.split(",").some((origin) => origin.trim() === "*")) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["CORS_ALLOWED_ORIGINS"],
+      message: "Wildcard CORS origins cannot be used with authenticated production requests"
+    });
+  }
+
+  if (values.SEED_PROFILE === "demo") {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["SEED_PROFILE"],
+      message: "The demo seed profile cannot run in production"
+    });
+  }
+
+  if (
+    values.SEED_ADMIN_PASSWORD === developmentAdminPassword ||
+    values.SEED_ADMIN_PASSWORD?.startsWith("replace-with-")
+  ) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["SEED_ADMIN_PASSWORD"],
+      message: "Use a strong unique password when bootstrapping a production administrator"
     });
   }
 });

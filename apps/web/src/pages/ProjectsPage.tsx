@@ -53,7 +53,10 @@ const createSteps = [
 ] as const;
 
 function toIsoDateString(date: Date) {
-  return date.toISOString().slice(0, 10);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 export function ProjectsPage() {
@@ -145,47 +148,23 @@ export function ProjectsPage() {
 
   const createProjectMutation = useMutation({
     mutationFn: async () => {
-      let resolvedClientId = clientSelection;
-
-      if (creatingNewClient) {
-        const createdClient = await apiRequest<{ data: { id: string } }>("/clients", {
-          method: "POST",
-          accessToken: accessToken ?? undefined,
-          body: {
-            name: newClientName.trim(),
-            company: newClientCompany.trim() ? newClientCompany.trim() : null
-          }
-        });
-        resolvedClientId = createdClient.data.id;
-      }
-
-      const createdProject = await apiRequest<{ data: { id: string } }>("/projects", {
+      const createdProject = await apiRequest<{ data: { id: string } }>("/projects/setup", {
         method: "POST",
         accessToken: accessToken ?? undefined,
         body: {
-          clientId: resolvedClientId,
+          clientId: creatingNewClient ? undefined : clientSelection,
+          newClient: creatingNewClient ? {
+            name: newClientName.trim(),
+            company: newClientCompany.trim() ? newClientCompany.trim() : null
+          } : undefined,
           name: name.trim(),
           description: description.trim() ? description.trim() : null,
           startDate,
           deadline,
-          priority
+          priority,
+          team: teamAssignments
         }
       });
-
-      if (teamAssignments.length > 0) {
-        await Promise.all(
-          teamAssignments.map((assignment) =>
-            apiRequest(`/projects/${createdProject.data.id}/team`, {
-              method: "POST",
-              accessToken: accessToken ?? undefined,
-              body: {
-                userId: assignment.userId,
-                role: assignment.role
-              }
-            })
-          )
-        );
-      }
 
       return { projectId: createdProject.data.id, projectName: name.trim() };
     },

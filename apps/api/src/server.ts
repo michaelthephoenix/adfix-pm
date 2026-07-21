@@ -3,16 +3,21 @@ import { env } from "./config/env.js";
 import { closeDatabase, isEmbeddedDatabase } from "./db/pool.js";
 import { runMigrations } from "./db/migrations.js";
 import { seedDatabase } from "./db/seed.js";
+import { startNotificationOutboxWorker } from "./services/notifications.service.js";
+import { ensureLocalStorageReady } from "./storage/storage-health.js";
 
 let server: ReturnType<ReturnType<typeof createApp>["listen"]> | undefined;
 let shuttingDown = false;
+let stopNotificationWorker: (() => void) | undefined;
 
 async function start() {
+  await ensureLocalStorageReady();
   if (isEmbeddedDatabase) {
     await runMigrations();
     await seedDatabase();
   }
 
+  stopNotificationWorker = startNotificationOutboxWorker();
   const app = createApp();
   server = app.listen(env.PORT, () => {
     console.log(`adfix-api listening on port ${env.PORT}`);
@@ -22,6 +27,7 @@ async function start() {
 async function shutdown(signal: string) {
   if (shuttingDown) return;
   shuttingDown = true;
+  stopNotificationWorker?.();
 
   console.log(`Received ${signal}. Starting graceful shutdown...`);
 

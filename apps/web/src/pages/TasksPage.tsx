@@ -155,7 +155,7 @@ export function TasksPage() {
                 {tasksQuery.data?.data.map((task) => (
                   <tr key={task.id}>
                     <td className="checkbox-cell"><input aria-label={`Select ${task.title}`} type="checkbox" checked={selectedTaskIds.includes(task.id)} onChange={() => toggleTaskSelection(task.id)} /></td>
-                    <td><span className="row-title">{task.title}</span><Link className="row-subtitle" to={`/projects/${task.project_id}`}>{task.project_name}</Link></td>
+                    <td><Link className="row-title task-deep-link" to={`/projects/${task.project_id}?tab=tasks&task=${task.id}`}>{task.title}</Link><Link className="row-subtitle" to={`/projects/${task.project_id}?tab=tasks`}>{task.project_name}</Link></td>
                     <td><span className={`status-chip status-${task.status}`}>{humanize(task.status)}</span></td>
                     <td>{humanize(task.phase)}</td>
                     <td><span className={`priority-dot priority-${task.priority}`} />{humanize(task.priority)}</td>

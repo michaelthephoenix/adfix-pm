@@ -1,0 +1,22 @@
+{
+  "$schema": "./node_modules/knip/schema.json",
+  "ignoreBinaries": ["taskkill"],
+  "workspaces": {
+    ".": {
+      "entry": ["playwright.config.ts", "tests/e2e/**/*.ts", "scripts/**/*.mjs"],
+      "project": ["playwright.config.ts", "tests/e2e/**/*.ts", "scripts/**/*.mjs"]
+    },
+    "apps/api": {
+      "entry": ["scripts/**/*.ts", "tests/**/*.ts"],
+      "project": ["src/**/*.ts", "scripts/**/*.ts", "tests/**/*.ts"]
+    },
+    "apps/web": {
+      "entry": ["src/**/*.test.tsx"],
+      "project": ["src/**/*.ts", "src/**/*.tsx"],
+      "ignoreDependencies": ["tailwindcss"],
+      "ignoreIssues": {
+        "src/generated/**": ["exports", "types"]
+      }
+    }
+  }
+}

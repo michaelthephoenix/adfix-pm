@@ -1,4 +1,5 @@
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   Bell,
@@ -18,6 +19,7 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useAuth } from "../state/auth";
+import { apiRequest } from "../lib/api";
 
 type NavItem = { to: string; label: string; icon: LucideIcon; adminOnly?: boolean };
 
@@ -47,7 +49,7 @@ function resolveHealthUrl() {
 }
 
 export function AppShell() {
-  const { user, logout } = useAuth();
+  const { user, accessToken, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
@@ -67,6 +69,15 @@ export function AppShell() {
   const healthUrlRef = useRef(resolveHealthUrl());
   const isClient = user?.accountType === "client";
   const navItems = isClient ? clientNavItems : staffNavItems;
+  const unreadNotificationsQuery = useQuery({
+    queryKey: ["notifications", "unread-count"],
+    queryFn: () => apiRequest<{ meta: { unreadCount: number } }>("/notifications?page=1&pageSize=1&unreadOnly=true", {
+      accessToken: accessToken ?? undefined
+    }),
+    enabled: Boolean(accessToken),
+    refetchInterval: 10_000
+  });
+  const unreadCount = unreadNotificationsQuery.data?.meta.unreadCount ?? 0;
 
   const checkApiHealth = useCallback(async () => {
     try {
@@ -143,6 +154,7 @@ export function AppShell() {
 
   return (
     <div className={layoutClassName}>
+      <a className="skip-link" href="#main-content">Skip to main content</a>
       <aside className="sidebar" id="app-sidebar">
         <div className="sidebar-head">
           <NavLink to={isClient ? "/portal/projects" : "/dashboard"} className="brand-link" aria-label="Adfix home">
@@ -226,8 +238,9 @@ export function AppShell() {
                 <Search size={17} />
               </button>
             ) : null}
-            <NavLink to="/notifications" className="ui-icon-button" aria-label="Notifications" title="Notifications">
+            <NavLink to="/notifications" className="ui-icon-button notification-trigger" aria-label={`${unreadCount} unread notifications`} title="Notifications">
               <Bell size={17} />
+              {unreadCount > 0 ? <span className="notification-count">{unreadCount > 99 ? "99+" : unreadCount}</span> : null}
             </NavLink>
             <div className="profile-menu-wrap" ref={profileMenuRef}>
               <button
@@ -258,7 +271,7 @@ export function AppShell() {
             </div>
           </div>
         </header>
-        <div className="page-frame"><Outlet /></div>
+        <div className="page-frame" id="main-content" tabIndex={-1}><Outlet /></div>
       </main>
 
       {isMobileNavOpen ? (

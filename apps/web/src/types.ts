@@ -4,11 +4,11 @@ export type User = {
   name: string;
   isAdmin: boolean;
   accountType: "staff" | "client";
+  mustChangePassword: boolean;
   avatarUrl?: string | null;
 };
 
 export type AuthTokens = {
   accessToken: string;
-  refreshToken?: string;
   user: User;
 };

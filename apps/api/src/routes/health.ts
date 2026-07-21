@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { pool } from "../db/pool.js";
+import { ensureLocalStorageReady } from "../storage/storage-health.js";
 
 export const healthRouter = Router();
 
@@ -13,6 +14,7 @@ healthRouter.get("/health", (_req, res) => {
 
 healthRouter.get("/ready", async (_req, res) => {
   let dbStatus: "ok" | "error" = "ok";
+  let storageStatus: "ok" | "error" = "ok";
 
   try {
     await pool.query("SELECT 1");
@@ -20,14 +22,22 @@ healthRouter.get("/ready", async (_req, res) => {
     dbStatus = "error";
   }
 
-  const statusCode = dbStatus === "ok" ? 200 : 503;
-  const status = dbStatus === "ok" ? "ok" : "degraded";
+  try {
+    await ensureLocalStorageReady();
+  } catch {
+    storageStatus = "error";
+  }
+
+  const ready = dbStatus === "ok" && storageStatus === "ok";
+  const statusCode = ready ? 200 : 503;
+  const status = ready ? "ok" : "degraded";
 
   return res.status(statusCode).json({
     status,
     service: "adfix-api",
     checks: {
-      database: dbStatus
+      database: dbStatus,
+      storage: storageStatus
     },
     timestamp: new Date().toISOString()
   });

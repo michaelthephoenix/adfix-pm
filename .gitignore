@@ -4,6 +4,8 @@ node_modules/
 !.env.example
 coverage/
 dist/
+test-results/
+playwright-report/
 .data/
 uploads/
 *.log

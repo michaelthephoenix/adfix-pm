@@ -1,5 +1,6 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 import { AppShell } from "./AppShell";
@@ -19,18 +20,24 @@ vi.mock("../state/auth", () => ({
 }));
 
 describe("AppShell", () => {
+  const renderShell = () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    return render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/dashboard"]}>
+          <Routes>
+            <Route element={<AppShell />}>
+              <Route path="/dashboard" element={<div>Dashboard Content</div>} />
+            </Route>
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>
+    );
+  };
+
   it("opens profile dropdown and calls logout", async () => {
     const user = userEvent.setup();
-
-    render(
-      <MemoryRouter initialEntries={["/dashboard"]}>
-        <Routes>
-          <Route element={<AppShell />}>
-            <Route path="/dashboard" element={<div>Dashboard Content</div>} />
-          </Route>
-        </Routes>
-      </MemoryRouter>
-    );
+    renderShell();
 
     await user.click(screen.getByRole("button", { name: /adfix admin/i }));
     await user.click(screen.getByRole("menuitem", { name: /logout/i }));
@@ -41,15 +48,7 @@ describe("AppShell", () => {
   it("toggles mobile search class when search icon is clicked", async () => {
     const user = userEvent.setup();
 
-    const { container } = render(
-      <MemoryRouter initialEntries={["/dashboard"]}>
-        <Routes>
-          <Route element={<AppShell />}>
-            <Route path="/dashboard" element={<div>Dashboard Content</div>} />
-          </Route>
-        </Routes>
-      </MemoryRouter>
-    );
+    const { container } = renderShell();
 
     const layout = container.querySelector(".layout");
     expect(layout).not.toBeNull();

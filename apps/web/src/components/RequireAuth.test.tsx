@@ -1,39 +1,59 @@
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { RequireAuth } from "./RequireAuth";
 
-vi.mock("../state/auth", () => ({
-  useAuth: vi.fn()
-}));
+let authState = {
+  isAuthenticated: true,
+  isInitializing: false,
+  user: {
+    id: "user-1",
+    email: "user@example.com",
+    name: "User",
+    isAdmin: false,
+    accountType: "staff" as const,
+    mustChangePassword: false
+  }
+};
 
-import { useAuth } from "../state/auth";
+vi.mock("../state/auth", () => ({ useAuth: () => authState }));
+
+function renderProtected(initialEntry: string) {
+  render(
+    <MemoryRouter initialEntries={[initialEntry]}>
+      <Routes>
+        <Route path="/dashboard" element={<RequireAuth><p>Dashboard</p></RequireAuth>} />
+        <Route path="/settings" element={<RequireAuth><p>Security settings</p></RequireAuth>} />
+        <Route path="/login" element={<p>Login</p>} />
+      </Routes>
+    </MemoryRouter>
+  );
+}
 
 describe("RequireAuth", () => {
-  it("redirects to login when user is not authenticated", () => {
-    vi.mocked(useAuth).mockReturnValue({
-      isAuthenticated: false,
-      isInitializing: false
-    } as never);
+  beforeEach(() => {
+    authState = {
+      isAuthenticated: true,
+      isInitializing: false,
+      user: { ...authState.user, mustChangePassword: false }
+    };
+  });
 
-    render(
-      <MemoryRouter initialEntries={["/private"]}>
-        <Routes>
-          <Route path="/login" element={<div>Login Page</div>} />
-          <Route
-            path="/private"
-            element={
-              <RequireAuth>
-                <div>Private Page</div>
-              </RequireAuth>
-            }
-          />
-        </Routes>
-      </MemoryRouter>
-    );
+  it("redirects an unauthenticated visitor to login", () => {
+    authState = { ...authState, isAuthenticated: false };
+    renderProtected("/dashboard");
+    expect(screen.getByText("Login")).toBeInTheDocument();
+  });
 
-    expect(screen.getByText("Login Page")).toBeInTheDocument();
-    expect(screen.queryByText("Private Page")).not.toBeInTheDocument();
+  it("redirects a temporary-password session to security settings", () => {
+    authState = { ...authState, user: { ...authState.user, mustChangePassword: true } };
+    renderProtected("/dashboard");
+    expect(screen.getByText("Security settings")).toBeInTheDocument();
+  });
+
+  it("allows a temporary-password session to reach security settings", () => {
+    authState = { ...authState, user: { ...authState.user, mustChangePassword: true } };
+    renderProtected("/settings");
+    expect(screen.getByText("Security settings")).toBeInTheDocument();
   });
 });
-

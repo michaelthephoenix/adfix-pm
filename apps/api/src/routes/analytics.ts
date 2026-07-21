@@ -8,25 +8,11 @@ import {
   getTimelineAnalytics
 } from "../services/analytics.service.js";
 import { sendUnauthorized } from "../utils/http-error.js";
+import { toCsv } from "../utils/csv.js";
 
 export const analyticsRouter = Router();
 
 analyticsRouter.use(requireAuth);
-
-function escapeCsvField(value: unknown): string {
-  if (value === null || typeof value === "undefined") return "";
-  const stringValue = String(value);
-  if (stringValue.includes(",") || stringValue.includes("\"") || stringValue.includes("\n")) {
-    return `"${stringValue.replace(/"/g, "\"\"")}"`;
-  }
-  return stringValue;
-}
-
-function toCsv(headers: string[], rows: Record<string, unknown>[]): string {
-  const headerLine = headers.join(",");
-  const lines = rows.map((row) => headers.map((header) => escapeCsvField(row[header])).join(","));
-  return [headerLine, ...lines].join("\n");
-}
 
 analyticsRouter.get("/dashboard", async (req: AuthenticatedRequest, res) => {
   if (!req.user) {

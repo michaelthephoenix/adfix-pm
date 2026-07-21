@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
-import { requireAuth } from "../middleware/auth.js";
+import { pool } from "../db/pool.js";
+import { requireAuth, requireStaff } from "../middleware/auth.js";
 import type { AuthenticatedRequest } from "../types/http.js";
 import { insertActivityLog, listClientActivity } from "../services/activity-log.service.js";
 import {
@@ -10,7 +11,7 @@ import {
   listClients,
   updateClient
 } from "../services/clients.service.js";
-import { sendNotFound, sendUnauthorized } from "../utils/http-error.js";
+import { sendConflict, sendForbidden, sendNotFound, sendUnauthorized } from "../utils/http-error.js";
 import { sendValidationError } from "../utils/validation.js";
 
 export const clientsRouter = Router();
@@ -40,7 +41,26 @@ const clientActivityQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(200).optional().default(50)
 });
 
-clientsRouter.use(requireAuth);
+async function canManageClient(userId: string, isAdmin: boolean, clientId: string) {
+  if (isAdmin) return true;
+  const result = await pool.query<{ allowed: boolean }>(
+    `SELECT EXISTS (
+       SELECT 1
+       FROM projects project
+       LEFT JOIN project_team team
+         ON team.project_id = project.id
+        AND team.user_id = $1
+        AND LOWER(team.role) = 'manager'
+       WHERE project.client_id = $2
+         AND project.deleted_at IS NULL
+         AND (project.created_by = $1 OR team.user_id IS NOT NULL)
+     ) AS allowed`,
+    [userId, clientId]
+  );
+  return result.rows[0]?.allowed === true;
+}
+
+clientsRouter.use(requireAuth, requireStaff);
 
 clientsRouter.get("/", async (req, res) => {
   const parsedQuery = clientsListQuerySchema.safeParse(req.query);
@@ -131,6 +151,10 @@ clientsRouter.put("/:id", async (req: AuthenticatedRequest, res) => {
     return sendUnauthorized(res, "Unauthorized");
   }
 
+  if (!(await canManageClient(req.user.id, req.user.isAdmin, parsedParams.data.id))) {
+    return sendForbidden(res, "Only administrators and relevant project managers can update this client");
+  }
+
   const client = await updateClient(parsedParams.data.id, parsed.data);
   if (!client) {
     return sendNotFound(res, "Client not found");
@@ -156,8 +180,18 @@ clientsRouter.delete("/:id", async (req: AuthenticatedRequest, res) => {
     return sendUnauthorized(res, "Unauthorized");
   }
 
+  if (!req.user.isAdmin) {
+    return sendForbidden(res, "Only administrators can archive client organizations");
+  }
+
   const deleted = await deleteClient(parsedParams.data.id);
-  if (!deleted) {
+  if (!deleted.ok) {
+    if (deleted.reason === "active_projects") {
+      return sendConflict(
+        res,
+        `Archive or reassign this client's ${deleted.activeProjectCount} active project${deleted.activeProjectCount === 1 ? "" : "s"} first`
+      );
+    }
     return sendNotFound(res, "Client not found");
   }
 

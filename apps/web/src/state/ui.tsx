@@ -1,4 +1,5 @@
-import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
+import * as AlertDialog from "@radix-ui/react-alert-dialog";
+import { createContext, useContext, useMemo, useState } from "react";
 import { CircleHelp, TriangleAlert, Trash2 } from "lucide-react";
 
 type ToastKind = "success" | "error" | "info";
@@ -36,7 +37,6 @@ const UIContext = createContext<UIContextValue | undefined>(undefined);
 export function UIProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [confirmState, setConfirmState] = useState<ConfirmState>(null);
-  const cancelButtonRef = useRef<HTMLButtonElement | null>(null);
 
   const toast = (message: string, kind: ToastKind = "info") => {
     const id = Date.now() + Math.floor(Math.random() * 1000);
@@ -68,21 +68,10 @@ export function UIProvider({ children }: { children: React.ReactNode }) {
     []
   );
 
-  useEffect(() => {
-    if (!confirmState) return;
-    cancelButtonRef.current?.focus();
-  }, [confirmState]);
-
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      if (!confirmState) return;
-      confirmState.resolve(false);
-      setConfirmState(null);
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [confirmState]);
+  const resolveConfirmation = (confirmed: boolean) => {
+    confirmState?.resolve(confirmed);
+    setConfirmState(null);
+  };
 
   return (
     <UIContext.Provider value={value}>
@@ -94,44 +83,43 @@ export function UIProvider({ children }: { children: React.ReactNode }) {
           </div>
         ))}
       </div>
-      {confirmState ? (
-        <div className="modal-backdrop" role="presentation">
-          <div className={`confirm-card confirm-${confirmState.tone}`} role="dialog" aria-modal="true" aria-labelledby="confirm-dialog-title" aria-describedby="confirm-dialog-description">
+      <AlertDialog.Root
+        open={Boolean(confirmState)}
+        onOpenChange={(open) => { if (!open && confirmState) resolveConfirmation(false); }}
+      >
+        <AlertDialog.Portal>
+          <AlertDialog.Overlay className="modal-backdrop" />
+          {confirmState ? (
+          <AlertDialog.Content className={`confirm-card confirm-${confirmState.tone}`}>
             <div className="confirm-heading">
               <span className="confirm-icon" aria-hidden="true">
                 {confirmState.tone === "danger" ? <Trash2 size={18} /> : confirmState.tone === "warning" ? <TriangleAlert size={18} /> : <CircleHelp size={18} />}
               </span>
               <div>
-                <h3 id="confirm-dialog-title">{confirmState.title}</h3>
-                <p id="confirm-dialog-description">{confirmState.message}</p>
+                <AlertDialog.Title>{confirmState.title}</AlertDialog.Title>
+                <AlertDialog.Description>{confirmState.message}</AlertDialog.Description>
               </div>
             </div>
             <div className="confirm-actions">
-              <button
-                ref={cancelButtonRef}
+              <AlertDialog.Cancel
                 type="button"
                 className="ghost-button"
-                onClick={() => {
-                  confirmState.resolve(false);
-                  setConfirmState(null);
-                }}
+                onClick={() => resolveConfirmation(false)}
               >
                 {confirmState.cancelLabel}
-              </button>
-              <button
+              </AlertDialog.Cancel>
+              <AlertDialog.Action
                 type="button"
                 className={confirmState.tone === "danger" ? "confirm-button confirm-button-danger" : confirmState.tone === "warning" ? "confirm-button confirm-button-warning" : "primary-button"}
-                onClick={() => {
-                  confirmState.resolve(true);
-                  setConfirmState(null);
-                }}
+                onClick={() => resolveConfirmation(true)}
               >
                 {confirmState.confirmLabel}
-              </button>
+              </AlertDialog.Action>
             </div>
-          </div>
-        </div>
-      ) : null}
+          </AlertDialog.Content>
+          ) : null}
+        </AlertDialog.Portal>
+      </AlertDialog.Root>
     </UIContext.Provider>
   );
 }

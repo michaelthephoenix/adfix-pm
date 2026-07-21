@@ -1,3 +1,5 @@
+import type { components } from "../generated/api-schema";
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "/api/v1";
 const API_TIMEOUT_MS = 12_000;
 let unauthorizedHandler: (() => void) | null = null;
@@ -9,7 +11,16 @@ type RequestOptions = {
   body?: unknown;
   accessToken?: string;
   skipAuthRetry?: boolean;
+  idempotencyKey?: string;
 };
+
+export type UploadOptions = {
+  onProgress?: (percentage: number) => void;
+  signal?: AbortSignal;
+  timeoutMs?: number;
+};
+
+type ApiErrorPayload = Partial<components["schemas"]["ErrorResponse"]>;
 
 export class ApiError extends Error {
   status: number;
@@ -30,10 +41,14 @@ export function setRefreshHandler(handler: (() => Promise<string | null>) | null
   refreshHandler = handler;
 }
 
+export function apiAssetUrl(path: string) {
+  return `${API_BASE_URL}${path}`;
+}
+
 async function parseError(response: Response) {
-  let payload: { error?: string; code?: string } | null = null;
+  let payload: ApiErrorPayload | null = null;
   try {
-    payload = (await response.json()) as { error?: string; code?: string };
+    payload = (await response.json()) as ApiErrorPayload;
   } catch {
     payload = null;
   }
@@ -91,7 +106,8 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
       method: options.method ?? "GET",
       headers: {
         ...(typeof options.body === "undefined" ? {} : { "content-type": "application/json" }),
-        ...(accessToken ? { authorization: `Bearer ${accessToken}` } : {})
+        ...(accessToken ? { authorization: `Bearer ${accessToken}` } : {}),
+        ...(options.idempotencyKey ? { "idempotency-key": options.idempotencyKey } : {})
       },
       body: typeof options.body === "undefined" ? undefined : JSON.stringify(options.body)
     })
@@ -102,17 +118,57 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   return (await response.json()) as T;
 }
 
-export async function apiUpload<T>(path: string, formData: FormData, accessToken?: string): Promise<T> {
-  const options: RequestOptions = { method: "POST", accessToken };
-  const response = await executeWithAuthRetry(path, options, (nextToken) =>
-    fetchWithTimeout(path, {
-      method: "POST",
-      headers: nextToken ? { authorization: `Bearer ${nextToken}` } : {},
-      body: formData
-    })
+function uploadWithProgress(path: string, formData: FormData, accessToken: string | undefined, options: UploadOptions) {
+  return new Promise<XMLHttpRequest>((resolve, reject) => {
+    const request = new XMLHttpRequest();
+    const abortUpload = () => request.abort();
+    const cleanup = () => options.signal?.removeEventListener("abort", abortUpload);
+    request.open("POST", `${API_BASE_URL}${path}`);
+    request.withCredentials = true;
+    request.timeout = options.timeoutMs ?? 30_000;
+    if (accessToken) request.setRequestHeader("authorization", `Bearer ${accessToken}`);
+    request.upload.addEventListener("progress", (event) => {
+      if (!event.lengthComputable) return;
+      options.onProgress?.(Math.min(100, Math.round((event.loaded / event.total) * 100)));
+    });
+    request.upload.addEventListener("load", () => options.onProgress?.(100));
+    request.addEventListener("load", () => { cleanup(); resolve(request); });
+    request.addEventListener("error", () => { cleanup(); reject(new ApiError("Could not reach API server. Check that backend is running.", 503, "API_UNREACHABLE")); });
+    request.addEventListener("timeout", () => { cleanup(); reject(new ApiError("Upload timed out. Check your connection and try again.", 408, "REQUEST_TIMEOUT")); });
+    request.addEventListener("abort", () => { cleanup(); reject(new ApiError("Upload cancelled.", 499, "UPLOAD_CANCELLED")); });
+    if (options.signal?.aborted) {
+      reject(new ApiError("Upload cancelled.", 499, "UPLOAD_CANCELLED"));
+      return;
+    }
+    options.signal?.addEventListener("abort", abortUpload, { once: true });
+    options.onProgress?.(0);
+    request.send(formData);
+  });
+}
+
+function parseUploadError(request: XMLHttpRequest) {
+  let payload: ApiErrorPayload | null = null;
+  try {
+    payload = JSON.parse(request.responseText) as ApiErrorPayload;
+  } catch {
+    payload = null;
+  }
+  return new ApiError(
+    payload?.error ?? `Request failed with status ${request.status}`,
+    request.status,
+    payload?.code ?? null
   );
-  if (!response.ok) throw await parseError(response);
-  return (await response.json()) as T;
+}
+
+export async function apiUpload<T>(path: string, formData: FormData, accessToken?: string, options: UploadOptions = {}): Promise<T> {
+  let response = await uploadWithProgress(path, formData, accessToken, options);
+  if (response.status === 401 && !path.startsWith("/auth/")) {
+    const refreshedToken = await refreshAccessToken();
+    if (refreshedToken) response = await uploadWithProgress(path, formData, refreshedToken, options);
+  }
+  if (response.status === 401 && unauthorizedHandler) unauthorizedHandler();
+  if (response.status < 200 || response.status >= 300) throw parseUploadError(response);
+  return JSON.parse(response.responseText) as T;
 }
 
 export async function apiDownload(path: string, fileName: string, accessToken?: string) {

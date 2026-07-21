@@ -143,13 +143,41 @@ export async function updateClient(
 }
 
 export async function deleteClient(clientId: string) {
-  const result = await pool.query<{ id: string }>(
-    `UPDATE clients
-     SET deleted_at = NOW(), updated_at = NOW()
-     WHERE id = $1 AND deleted_at IS NULL
-     RETURNING id`,
-    [clientId]
-  );
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const existing = await client.query<{ id: string }>(
+      `SELECT id FROM clients WHERE id = $1 AND deleted_at IS NULL FOR UPDATE`,
+      [clientId]
+    );
+    if (!existing.rows[0]) {
+      await client.query("ROLLBACK");
+      return { ok: false as const, reason: "not_found" as const };
+    }
+    const activeProjects = await client.query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count
+       FROM projects WHERE client_id = $1 AND deleted_at IS NULL`,
+      [clientId]
+    );
+    if (Number(activeProjects.rows[0]?.count ?? 0) > 0) {
+      await client.query("ROLLBACK");
+      return {
+        ok: false as const,
+        reason: "active_projects" as const,
+        activeProjectCount: Number(activeProjects.rows[0]?.count ?? 0)
+      };
+    }
 
-  return result.rowCount === 1;
+    await client.query(
+      `UPDATE clients SET deleted_at = NOW(), updated_at = NOW() WHERE id = $1`,
+      [clientId]
+    );
+    await client.query("COMMIT");
+    return { ok: true as const };
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
 }
